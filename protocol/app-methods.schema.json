@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ipaas.dev/protocol/1/app-methods.schema.json",
+  "title": "App methods",
+  "description": "JSON-RPC methods the platform calls on an app. One $def per method with `params` and `result`.",
+  "$defs": {
+    "initialize": {
+      "params": {
+        "type": "object",
+        "required": ["protocolVersion", "platformUrl"],
+        "additionalProperties": false,
+        "properties": {
+          "protocolVersion": { "const": "1" },
+          "platformUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Where the app sends platform method calls."
+          }
+        }
+      },
+      "result": {
+        "type": "object",
+        "required": ["manifest"],
+        "additionalProperties": false,
+        "properties": {
+          "manifest": { "$ref": "manifest.schema.json" }
+        }
+      }
+    },
+    "health": {
+      "params": { "type": "object", "additionalProperties": false },
+      "result": {
+        "type": "object",
+        "required": ["status"],
+        "additionalProperties": false,
+        "properties": {
+          "status": { "const": "ok" }
+        }
+      }
+    },
+    "install": {
+      "description": "Optional. Called once when a tenant installs the app.",
+      "params": {
+        "type": "object",
+        "required": ["context", "callbackToken"],
+        "additionalProperties": false,
+        "properties": {
+          "context": { "$ref": "context.schema.json#/$defs/install" },
+          "callbackToken": { "$ref": "#/$defs/callbackToken" }
+        }
+      },
+      "result": { "type": "object", "additionalProperties": false }
+    },
+    "uninstall": {
+      "description": "Optional. Called once when a tenant removes the app.",
+      "params": {
+        "type": "object",
+        "required": ["context", "callbackToken"],
+        "additionalProperties": false,
+        "properties": {
+          "context": { "$ref": "context.schema.json#/$defs/install" },
+          "callbackToken": { "$ref": "#/$defs/callbackToken" }
+        }
+      },
+      "result": { "type": "object", "additionalProperties": false }
+    },
+    "actions/invoke": {
+      "params": {
+        "type": "object",
+        "required": ["action", "input", "context", "callbackToken"],
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Key in the manifest's `provides.actions`."
+          },
+          "input": {
+            "description": "Valid against the action's `input` schema."
+          },
+          "context": { "$ref": "context.schema.json#/$defs/call" },
+          "callbackToken": { "$ref": "#/$defs/callbackToken" }
+        }
+      },
+      "result": {
+        "type": "object",
+        "required": ["output"],
+        "additionalProperties": false,
+        "properties": {
+          "output": {
+            "description": "Valid against the action's `output` schema."
+          }
+        }
+      }
+    },
+    "callbackToken": {
+      "type": "string",
+      "description": "Bearer token for platform method calls. Scoped to this install and, for actions, this call."
+    }
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ipaas.dev/protocol/1/manifest.schema.json",
+  "title": "Manifest",
+  "description": "What an app provides and what it needs. Returned from `initialize`.",
+  "type": "object",
+  "required": ["name", "version", "protocol", "provides", "needs"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Stable app identifier."
+    },
+    "version": {
+      "type": "string",
+      "description": "App version, semver."
+    },
+    "protocol": {
+      "const": "1",
+      "description": "Protocol major the app speaks."
+    },
+    "description": { "type": "string" },
+    "provides": { "$ref": "#/$defs/provides" },
+    "needs": { "$ref": "#/$defs/needs" },
+    "config": {
+      "$ref": "#/$defs/jsonSchema",
+      "description": "Schema for per-install settings. Validated by the platform, passed in every context."
+    }
+  },
+  "$defs": {
+    "jsonSchema": {
+      "$ref": "https://json-schema.org/draft/2020-12/schema"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+    },
+    "signature": {
+      "type": "object",
+      "required": ["input", "output"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "input": { "$ref": "#/$defs/jsonSchema" },
+        "output": { "$ref": "#/$defs/jsonSchema" }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "required": ["payload"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "payload": { "$ref": "#/$defs/jsonSchema" }
+      }
+    },
+    "provides": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/signature" }
+        },
+        "triggers": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/trigger" }
+        }
+      }
+    },
+    "credential": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["oauth2", "apiKey"] },
+        "scopes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "OAuth2 scopes. Ignored for apiKey."
+        }
+      }
+    },
+    "needs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "credentials": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/credential" }
+        },
+        "state": {
+          "type": "boolean",
+          "description": "Whether the app uses install scoped key-value state."
+        },
+        "actions": {
+          "type": "object",
+          "description": "Ports. Each is a signature the platform binds to a provider action at install time.",
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/signature" }
+        }
+      }
+    }
+  }
+}

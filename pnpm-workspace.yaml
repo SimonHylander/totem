@@ -1,0 +1,10 @@
+packages:
+  - "protocol"
+  - "packages/*"
+  - "sdk/javascript-sdk"
+  - "examples/*"
+minimumReleaseAgeExclude:
+  - '@types/node@26.6.3'
+  - '@vitest/mocker@5.0.2'
+  - '@vitest/spy@5.0.2'
+  - vitest@5.0.2

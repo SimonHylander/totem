@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ipaas.dev/protocol/1/context.schema.json",
+  "title": "Context",
+  "description": "Carried in the params of every platform to app call.",
+  "$defs": {
+    "install": {
+      "type": "object",
+      "required": ["tenantId", "installId", "config"],
+      "additionalProperties": false,
+      "properties": {
+        "tenantId": { "type": "string" },
+        "installId": { "type": "string" },
+        "config": {
+          "type": "object",
+          "description": "Per-install settings, valid against the manifest's `config` schema."
+        }
+      }
+    },
+    "call": {
+      "type": "object",
+      "required": ["tenantId", "installId", "config", "callId"],
+      "additionalProperties": false,
+      "properties": {
+        "tenantId": { "type": "string" },
+        "installId": { "type": "string" },
+        "config": { "type": "object" },
+        "callId": {
+          "type": "string",
+          "description": "Unique per invocation. Logs and driven calls are attached to it."
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "description": "Same key means the platform is retrying the same logical call."
+        },
+        "deadline": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The platform stops waiting at this instant."
+        }
+      }
+    }
+  }
+}

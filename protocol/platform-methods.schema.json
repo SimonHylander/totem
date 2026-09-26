@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ipaas.dev/protocol/1/platform-methods.schema.json",
+  "title": "Platform methods",
+  "description": "JSON-RPC methods an app calls on the platform, authenticated with the callback token. Tenant and install come from the token, never from params.",
+  "$defs": {
+    "credentials/get": {
+      "params": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Key in the manifest's `needs.credentials`."
+          }
+        }
+      },
+      "result": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["type", "accessToken", "expiresAt"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "oauth2" },
+              "accessToken": { "type": "string" },
+              "expiresAt": { "type": "string", "format": "date-time" }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type", "key"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "const": "apiKey" },
+              "key": { "type": "string" }
+            }
+          }
+        ]
+      }
+    },
+    "state/get": {
+      "params": {
+        "type": "object",
+        "required": ["key"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "type": "string" }
+        }
+      },
+      "result": {
+        "type": "object",
+        "required": ["value"],
+        "additionalProperties": false,
+        "properties": {
+          "value": { "description": "Any JSON value. `null` when the key is unset." }
+        }
+      }
+    },
+    "state/set": {
+      "params": {
+        "type": "object",
+        "required": ["key", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "type": "string" },
+          "value": { "description": "Any JSON value. `null` deletes the key." }
+        }
+      },
+      "result": { "type": "object", "additionalProperties": false }
+    },
+    "log": {
+      "params": {
+        "type": "object",
+        "required": ["level", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "level": { "enum": ["debug", "info", "warn", "error"] },
+          "message": { "type": "string" },
+          "data": { "type": "object" }
+        }
+      },
+      "result": { "type": "object", "additionalProperties": false }
+    },
+    "actions/invoke": {
+      "description": "Call a port from `needs.actions`. The platform resolves the install's binding and invokes the provider.",
+      "params": {
+        "type": "object",
+        "required": ["port", "input"],
+        "additionalProperties": false,
+        "properties": {
+          "port": {
+            "type": "string",
+            "description": "Key in the manifest's `needs.actions`."
+          },
+          "input": {
+            "description": "Valid against the port's `input` schema."
+          }
+        }
+      },
+      "result": {
+        "type": "object",
+        "required": ["output"],
+        "additionalProperties": false,
+        "properties": {
+          "output": {
+            "description": "Valid against the port's `output` schema."
+          }
+        }
+      }
+    }
+  }
+}
