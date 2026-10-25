@@ -1,0 +1,22 @@
+{
+  "name": "@totem/example-hubspot",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "node --watch dist/server.js",
+    "hs:upload": "cd totem-test && hs project upload"
+  },
+  "dependencies": {
+    "@totem/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@hubspot/cli": "^8.17.0",
+    "@types/node": "^26.6.3",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.2"
+  }
+}
