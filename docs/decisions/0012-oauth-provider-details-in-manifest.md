@@ -1,6 +1,6 @@
 # 0012: Apps declare provider details, the platform runs generic OAuth
 
-Status: Proposed (2026-10-25)
+Status: Accepted (2026-10-25)
 
 ## Context
 
@@ -81,4 +81,3 @@ The change makes `authorizeUrl`, `tokenUrl` and `scopes` required on oauth2 need
 - Connections are per install. A tenant with two HubSpot apps connects twice.
 - The platform runs as one process. Running more than one needs a cross-process lock around each refresh request, not only a conditional write. Otherwise two processes redeem the same refresh token, which breaks providers that rotate refresh tokens.
 - A new app version that adds scopes does not invalidate existing connections yet. Tenants keep tokens without the new scopes until they reconnect. This belongs with the version-negotiation open question.
-- The design sketch and its type checks are in [`docs/design/auth/`](../design/auth/). Run `docs/design/auth/check-sketch.sh` to recompile them.
