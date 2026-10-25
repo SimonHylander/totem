@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://totem.dev/protocol/1/platform-methods.schema.json",
   "title": "Platform methods",
-  "description": "JSON-RPC methods an app calls on the platform, authenticated with the callback token. Tenant and install come from the token, never from params.",
+  "description": "JSON-RPC methods an app calls on the platform, authenticated with the callback token. Tenant and install come from the token, never from params. The exception is `actions/start`, which the app signs with its HMAC secret (ADR 0014).",
   "$defs": {
     "credentials/get": {
       "params": {
@@ -107,6 +107,27 @@
           "output": {
             "description": "Valid against the port's `output` schema."
           }
+        }
+      }
+    },
+    "actions/start": {
+      "description": "Run one of the calling app's own actions for one of its installs, as the management API would. Signed with `X-Totem-Signature` using the app's HMAC secret, with no callback token.",
+      "params": {
+        "type": "object",
+        "required": ["installId", "action", "input"],
+        "additionalProperties": false,
+        "properties": {
+          "installId": { "type": "string", "description": "An install of the calling app." },
+          "action": { "type": "string", "description": "Key in the app's `provides.actions`." },
+          "input": { "description": "Valid against the action's `input` schema." }
+        }
+      },
+      "result": {
+        "type": "object",
+        "required": ["output"],
+        "additionalProperties": false,
+        "properties": {
+          "output": { "description": "Valid against the action's `output` schema." }
         }
       }
     }
