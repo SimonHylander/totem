@@ -144,7 +144,9 @@ describe("OAuth connect", () => {
     });
 
     const started = await alice.connect(installId, "crm");
-    const authorizeUrl = new URL(started.headers.get("location")!);
+    const location = started.headers.get("location")!;
+    expect(location).toContain("scope=contacts.read%20contacts.write");
+    const authorizeUrl = new URL(location);
     expect(authorizeUrl.origin + authorizeUrl.pathname).toBe("https://crm.test/oauth/authorize");
     expect(Object.fromEntries(authorizeUrl.searchParams)).toMatchObject({
       response_type: "code",

@@ -73,6 +73,8 @@ export function beginOAuthConnect(ctx: Context, session: Session, installId: str
   url.searchParams.set("redirect_uri", redirectUriFor(ctx, binding.id));
   url.searchParams.set("scope", need.scopes.join(" "));
   url.searchParams.set("state", state);
+  // URLSearchParams encodes spaces as "+". HubSpot documents scopes joined by "%20".
+  url.search = url.searchParams.toString().replaceAll("+", "%20");
   return url.toString();
 }
 
