@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ipaas.dev/protocol/1/context.schema.json",
+  "$id": "https://totem.dev/protocol/1/context.schema.json",
   "title": "Context",
   "description": "Carried in the params of every platform to app call.",
   "$defs": {

@@ -1,5 +1,5 @@
 import type { FromSchema, JSONSchema } from "json-schema-to-ts";
-import type { CredentialValue, LogLevel, Manifest, Signature } from "@ipaas/protocol";
+import type { CredentialValue, LogLevel, Manifest, Signature } from "@totem/protocol";
 
 // Everything here is derived from the manifest literal. Authors write the
 // manifest once and get typed handlers, ports, credentials and config.

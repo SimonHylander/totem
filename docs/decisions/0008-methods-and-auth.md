@@ -43,7 +43,7 @@ The body is what gets signed. Proxies strip headers.
 
 ### Authentication
 
-- **Platform to app.** HMAC-SHA256 over `timestamp + "." + body` with a per-app secret issued at registration. Sent as `X-Ipaas-Signature: t=<unix>,v1=<hex>`. Apps reject stale timestamps.
+- **Platform to app.** HMAC-SHA256 over `timestamp + "." + body` with a per-app secret issued at registration. Sent as `X-Totem-Signature: t=<unix>,v1=<hex>`. Apps reject stale timestamps.
 - **App to platform.** A bearer token minted by the platform per call and passed in `callbackToken`. It is short-lived and scoped to one install and one call. The platform derives tenant, install and manifest from it, so driven port params carry no tenant fields. Install hooks receive an install-scoped token instead.
 
 Apps store no platform secret beyond the HMAC key.

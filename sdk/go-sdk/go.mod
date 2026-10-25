@@ -1,3 +1,3 @@
-module github.com/ipaas/ipaas/sdk/go-sdk
+module github.com/simonhylander/totem/sdk/go-sdk
 
 go 1.23

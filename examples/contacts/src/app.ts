@@ -1,4 +1,4 @@
-import { defineApp } from "@ipaas/sdk";
+import { defineApp } from "@totem/sdk";
 import { manifest } from "./manifest.js";
 
 // Stand-in for a CRM client. A real app would call the CRM's HTTP API here.

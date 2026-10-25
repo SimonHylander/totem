@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ipaas.dev/protocol/1/manifest.schema.json",
+  "$id": "https://totem.dev/protocol/1/manifest.schema.json",
   "title": "Manifest",
   "description": "What an app provides and what it needs. Returned from `initialize`.",
   "type": "object",

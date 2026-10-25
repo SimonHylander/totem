@@ -1,7 +1,7 @@
-// Platform to app request signing. Header `X-Ipaas-Signature: t=<unix>,v1=<hex>`
+// Platform to app request signing. Header `X-Totem-Signature: t=<unix>,v1=<hex>`
 // where v1 = HMAC-SHA256(secret, `${t}.${body}`).
 
-export const SIGNATURE_HEADER = "x-ipaas-signature";
+export const SIGNATURE_HEADER = "x-totem-signature";
 
 const DEFAULT_TOLERANCE_SECONDS = 300;
 
