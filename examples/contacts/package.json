@@ -10,7 +10,8 @@
     "dev": "node --watch dist/server.js"
   },
   "dependencies": {
-    "@totem/sdk": "workspace:*"
+    "@totem/sdk": "workspace:*",
+    "effect": "^4.0.6"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

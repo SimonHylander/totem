@@ -18,7 +18,8 @@
     "live": "node --env-file-if-exists=.env.local dist/live.js"
   },
   "dependencies": {
-    "@totem/sdk": "workspace:*"
+    "@totem/sdk": "workspace:*",
+    "effect": "^4.0.6"
   },
   "devDependencies": {
     "@totem/platform": "workspace:*",

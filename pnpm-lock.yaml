@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      effect:
+        specifier: ^4.0.6
+        version: 4.0.6
       turbo:
         specifier: ^2.11.3
         version: 2.11.3
@@ -17,6 +20,9 @@ importers:
       '@totem/sdk':
         specifier: workspace:*
         version: link:../../sdk/javascript-sdk
+      effect:
+        specifier: ^4.0.6
+        version: 4.0.6
     devDependencies:
       '@types/node':
         specifier: ^26.6.3
@@ -39,6 +45,9 @@ importers:
       '@totem/sdk':
         specifier: workspace:*
         version: link:../../sdk/javascript-sdk
+      effect:
+        specifier: ^4.0.6
+        version: 4.0.6
       react:
         specifier: ^19.3.1
         version: 19.3.1
@@ -79,6 +88,9 @@ importers:
       '@totem/sdk':
         specifier: workspace:*
         version: link:../../sdk/javascript-sdk
+      effect:
+        specifier: ^4.0.6
+        version: 4.0.6
     devDependencies:
       '@hubspot/cli':
         specifier: ^8.17.0
@@ -111,6 +123,9 @@ importers:
       '@totem/protocol':
         specifier: workspace:*
         version: link:../protocol
+      effect:
+        specifier: ^4.0.6
+        version: 4.0.6
     devDependencies:
       '@totem/sdk':
         specifier: workspace:*
@@ -127,6 +142,9 @@ importers:
 
   protocol:
     dependencies:
+      effect:
+        specifier: ^4.0.6
+        version: 4.0.6
       json-schema-to-ts:
         specifier: ^3.1.1
         version: 3.1.1
@@ -146,6 +164,9 @@ importers:
       '@totem/protocol':
         specifier: workspace:*
         version: link:../../protocol
+      effect:
+        specifier: ^4.0.6
+        version: 4.0.6
       json-schema-to-ts:
         specifier: ^3.1.1
         version: 3.1.1
@@ -1654,6 +1675,9 @@ packages:
 
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
+
+  effect@4.0.6:
+    resolution: {integrity: sha512-Tc3mkzuLR6t6P9dhLt0D2GrxYtmU5td4XEJEiXCmILz53IRIfJyHsKZWjTA3xEjiwpNTtXBgI4iqYPxMztBDrw==}
 
   electron-to-chromium@1.5.464:
     resolution: {integrity: sha512-nRa65aFge40viPAKxMKULIY8tcXKwKboJWNn4RoKwyWXJ6SP7BnrDGKUTzc64818jIciH0PK7LSF8QzZes19GA==}
@@ -4899,6 +4923,8 @@ snapshots:
   eastasianwidth@0.2.0: {}
 
   ee-first@1.1.1: {}
+
+  effect@4.0.6: {}
 
   electron-to-chromium@1.5.464: {}
 
