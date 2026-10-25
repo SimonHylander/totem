@@ -14,3 +14,5 @@ One file per decision. Status is `Accepted`, `Proposed` or `Superseded`. To chan
 | [0008](0008-methods-and-auth.md) | Method set, context in params, HMAC and per-call tokens | Accepted |
 | [0009](0009-credentials-token-handoff.md) | Credentials by token handoff | Accepted |
 | [0010](0010-typescript-types-from-manifest.md) | TypeScript infers types from the manifest literal, no codegen | Accepted |
+| [0011](0011-platform-access.md) | Platform access stays inside the platform. Management tokens, two roles, one `can` | Proposed |
+| [0012](0012-oauth-provider-details-in-manifest.md) | Apps declare provider details, the platform runs generic OAuth with pinned bindings | Proposed |
