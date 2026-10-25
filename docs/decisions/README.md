@@ -18,3 +18,4 @@ One file per decision. Status is `Accepted`, `Proposed` or `Superseded`. To chan
 | [0012](0012-oauth-provider-details-in-manifest.md) | Apps declare provider details, the platform runs generic OAuth with pinned bindings | Accepted |
 | [0013](0013-port-binding.md) | Ports bind to provider installs. Optional, same tenant, forwarded as normal action calls | Accepted |
 | [0014](0014-apps-start-their-own-actions.md) | Apps can start their own actions through `actions/start`, signed with their HMAC secret | Accepted |
+| [0015](0015-apps-manage-their-ports.md) | Apps list public apps and bind, unbind and connect their own ports through signed methods | Accepted |

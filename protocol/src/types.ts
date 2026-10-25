@@ -132,11 +132,54 @@ export type PlatformMethods = {
   };
 };
 
-/** Methods an app calls on the platform signed with its HMAC secret, outside any call (ADR 0014). */
+/** A public app as `apps/list` returns it. `actions` is its manifest's `provides.actions`. */
+export type CatalogApp = {
+  appId: string;
+  name: string;
+  description?: string;
+  actions: Record<string, Signature>;
+};
+
+/** Whether a provider install holds a usable credential for one of its `needs.credentials`. */
+export type CredentialStatus = { type: CredentialNeed["type"]; connected: boolean };
+
+/** What one port is bound to, as `ports/list` returns it. */
+export type BoundPort = {
+  appId: string;
+  /** The provider's manifest name. */
+  name: string;
+  action: string;
+  credentials: Record<string, CredentialStatus>;
+};
+
+/**
+ * Methods an app calls on the platform signed with its HMAC secret, outside any call. Each names
+ * one of the app's installs, which also picks the secret (ADR 0014, ADR 0015).
+ */
 export type SignedPlatformMethods = {
   "actions/start": {
     params: { installId: string; action: string; input: unknown };
     result: { output: unknown };
+  };
+  "apps/list": {
+    params: { installId: string };
+    result: { apps: CatalogApp[] };
+  };
+  "ports/list": {
+    params: { installId: string };
+    result: { ports: Record<string, BoundPort | null> };
+  };
+  "ports/bind": {
+    params: { installId: string; port: string; appId: string; action: string };
+    result: Record<string, never>;
+  };
+  "ports/unbind": {
+    params: { installId: string; port: string };
+    result: Record<string, never>;
+  };
+  "ports/connect": {
+    params: { installId: string; port: string; credential: string; returnTo: string };
+    result: { url: string };
   };
 };
 

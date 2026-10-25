@@ -15,6 +15,7 @@ export type Principal = { id: string; role: Role };
 export type ManagementAction =
   | { type: "app.register" }
   | { type: "app.setOAuthClient" }
+  | { type: "app.setVisibility" }
   | { type: "install.create"; tenantId: string }
   | { type: "install.connect"; install: Install }
   | { type: "install.bind"; install: Install }
@@ -61,6 +62,7 @@ export function can({ role }: Principal, action: ManagementAction): boolean {
   switch (action.type) {
     case "app.register":
     case "app.setOAuthClient":
+    case "app.setVisibility":
       return false;
     case "install.create":
       return action.tenantId === role.tenantId;

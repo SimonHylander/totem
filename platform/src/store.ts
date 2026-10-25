@@ -31,6 +31,8 @@ export class Sealed {
   }
 }
 
+export type Visibility = "public" | "internal";
+
 export type AppRecord = {
   id: string;
   url: string;
@@ -38,6 +40,8 @@ export type AppRecord = {
   secret: Sealed;
   /** Null until `initialize` has pulled it. */
   manifest: Manifest | null;
+  /** Set by an operator. `apps/list` shows only public apps, and `ports/bind` binds only to them (ADR 0015). */
+  visibility: Visibility;
   /** The current OAuth client by credential name. No management endpoint returns these. */
   oauthBindings: Map<string, OAuthBinding>;
 };
@@ -86,8 +90,13 @@ export type PendingConnect = {
   installId: string;
   credential: string;
   binding: OAuthBinding;
-  /** Only the session that started the connect may finish it. */
-  sessionId: string;
+  /**
+   * Only the session that started the connect may finish it. Null when an app started it through
+   * `ports/connect`, because the app, not the platform, knows who the user is (ADR 0015).
+   */
+  sessionId: string | null;
+  /** Where the callback redirects. Null shows the platform's own "Connected" page. */
+  returnTo: string | null;
   expiresAt: Date;
 };
 

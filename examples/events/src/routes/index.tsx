@@ -17,6 +17,9 @@ function EventList() {
   return (
     <main>
       <h1>Events</h1>
+      <p>
+        <Link to="/integrations">Integrations</Link>
+      </p>
       {events.length === 0 && <p>No events yet.</p>}
       <ul>
         {events.map((event) => (

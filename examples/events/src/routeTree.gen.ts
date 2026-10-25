@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as TotemRouteImport } from './routes/totem'
 import { Route as EventsEventIdRouteImport } from './routes/events.$eventId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntegrationsRoute = IntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TotemRoute = TotemRouteImport.update({
@@ -31,30 +37,34 @@ const EventsEventIdRoute = EventsEventIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/integrations': typeof IntegrationsRoute
   '/totem': typeof TotemRoute
   '/events/$eventId': typeof EventsEventIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/integrations': typeof IntegrationsRoute
   '/totem': typeof TotemRoute
   '/events/$eventId': typeof EventsEventIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/integrations': typeof IntegrationsRoute
   '/totem': typeof TotemRoute
   '/events/$eventId': typeof EventsEventIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/totem' | '/events/$eventId'
+  fullPaths: '/' | '/integrations' | '/totem' | '/events/$eventId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/totem' | '/events/$eventId'
-  id: '__root__' | '/' | '/totem' | '/events/$eventId'
+  to: '/' | '/integrations' | '/totem' | '/events/$eventId'
+  id: '__root__' | '/' | '/integrations' | '/totem' | '/events/$eventId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  IntegrationsRoute: typeof IntegrationsRoute
   TotemRoute: typeof TotemRoute
   EventsEventIdRoute: typeof EventsEventIdRoute
 }
@@ -66,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/integrations': {
+      id: '/integrations'
+      path: '/integrations'
+      fullPath: '/integrations'
+      preLoaderRoute: typeof IntegrationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/totem': {
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  IntegrationsRoute: IntegrationsRoute,
   TotemRoute: TotemRoute,
   EventsEventIdRoute: EventsEventIdRoute,
 }

@@ -10,7 +10,15 @@ import {
 } from "@totem/protocol";
 import { HttpError, authorize, type Principal } from "./access.js";
 import { mintCallbackToken, type CallbackClaims } from "./callback-token.js";
-import { Sealed, randomToken, type AppRecord, type Context, type Install, type PortBinding } from "./store.js";
+import {
+  Sealed,
+  randomToken,
+  type AppRecord,
+  type Context,
+  type Install,
+  type PortBinding,
+  type Visibility,
+} from "./store.js";
 
 // Apps and installs: registration, manifest pull, install hooks and action invocation.
 
@@ -32,6 +40,7 @@ export function registerApp({ store }: Context, principal: Principal, url: strin
     url,
     secret: new Sealed(secret),
     manifest: null,
+    visibility: "internal",
     oauthBindings: new Map(),
   };
   store.apps.set(app.id, app);
@@ -51,6 +60,12 @@ export async function initializeApp(ctx: Context, principal: Principal, appId: s
   return manifest;
 }
 
+/** Make an app public or internal (ADR 0015). New apps start internal. */
+export function setVisibility(ctx: Context, principal: Principal, appId: string, visibility: Visibility): void {
+  authorize(principal, { type: "app.setVisibility" });
+  getApp(ctx, appId).visibility = visibility;
+}
+
 /** Install an app for a tenant, bind its ports and run its optional `install` hook. */
 export async function createInstall(
   ctx: Context,
@@ -64,7 +79,14 @@ export async function createInstall(
   const app = getApp(ctx, appId);
   if (!app.manifest) throw new HttpError(409, `app ${appId} has no manifest yet. Initialize it first.`);
 
-  const install: Install = {
+  const install = newInstall(tenantId, appId, config);
+  for (const [port, binding] of Object.entries(bindings)) install.bindings.set(port, checkBinding(ctx, install, port, binding));
+  return addInstall(ctx, app, install);
+}
+
+/** An install with no bindings, connections or state, not yet stored. */
+export function newInstall(tenantId: string, appId: string, config: Record<string, unknown>): Install {
+  return {
     id: crypto.randomUUID(),
     tenantId,
     appId,
@@ -73,11 +95,14 @@ export async function createInstall(
     connections: new Map(),
     state: new Map(),
   };
-  for (const [port, binding] of Object.entries(bindings)) install.bindings.set(port, checkBinding(ctx, install, port, binding));
+}
+
+/** Store an install and run the app's optional `install` hook. A failing hook removes it again. */
+export async function addInstall(ctx: Context, app: AppRecord, install: Install): Promise<Install> {
   ctx.store.installs.set(install.id, install);
   try {
     await callApp(ctx, app, "install", {
-      context: { tenantId, installId: install.id, config },
+      context: { tenantId: install.tenantId, installId: install.id, config: install.config },
       callbackToken: mintCallbackToken(ctx.store.callbackKey, install.id, null),
     });
   } catch (error) {

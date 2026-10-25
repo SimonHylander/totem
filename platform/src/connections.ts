@@ -1,9 +1,24 @@
 import { createHash } from "node:crypto";
-import { ErrorCode, RpcError, type CredentialValue, type Endpoint, type OAuth2Need } from "@totem/protocol";
+import {
+  ErrorCode,
+  RpcError,
+  type CredentialStatus,
+  type CredentialValue,
+  type Endpoint,
+  type OAuth2Need,
+} from "@totem/protocol";
 import { HttpError, authorize, type Principal, type Session } from "./access.js";
 import { getApp, getInstall, manifestOf } from "./apps.js";
 import type { CallbackClaims } from "./callback-token.js";
-import { Sealed, randomToken, type Context, type Install, type OAuthBinding, type OAuthConnection } from "./store.js";
+import {
+  Sealed,
+  randomToken,
+  type Context,
+  type Install,
+  type OAuthBinding,
+  type OAuthConnection,
+  type PendingConnect,
+} from "./store.js";
 
 // Connector credentials (ADR 0009, ADR 0012). Tenants connect them, the platform stores and
 // refreshes them, and `credentials/get` hands the current value to the app.
@@ -57,14 +72,27 @@ export function setOAuthClient(
 export function beginOAuthConnect(ctx: Context, session: Session, installId: string, name: string): string {
   const install = getInstall(ctx, installId);
   authorize(session.principal, { type: "install.connect", install });
+  return startOAuthConnect(ctx, install, name, { sessionId: session.id, returnTo: null });
+}
+
+/**
+ * Record a pending connect and return the provider's authorize URL. `sessionId` null means an app
+ * started it through `ports/connect` (ADR 0015).
+ */
+export function startOAuthConnect(
+  ctx: Context,
+  install: Install,
+  name: string,
+  owner: Pick<PendingConnect, "sessionId" | "returnTo">,
+): string {
   const { need, binding } = oauthBinding(ctx, install, name);
 
   const state = randomToken();
   ctx.store.pendingConnects.set(state, {
-    installId,
+    installId: install.id,
     credential: name,
     binding,
-    sessionId: session.id,
+    ...owner,
     expiresAt: new Date(Date.now() + CONNECT_TTL_MS),
   });
   const url = new URL(binding.pinned.authorizeUrl);
@@ -82,24 +110,27 @@ export function beginOAuthConnect(ctx: Context, session: Session, installId: str
 export type CallbackQuery = { state: string } & ({ code: string } | { error: string });
 
 /**
- * Handle the provider redirect to a binding's callback. The browser must present the session that
- * began the connect, so a consent URL sent to someone else cannot attach their account here.
+ * Handle the provider redirect to a binding's callback. A connect begun on the platform needs the
+ * browser to present the session that began it, so a consent URL sent to someone else cannot attach
+ * their account here. A connect an app began needs no session (ADR 0015).
  */
 export async function finishOAuthConnect(
   ctx: Context,
-  session: Session,
+  session: Session | null,
   bindingId: string,
   query: CallbackQuery,
-): Promise<{ install: Install; credential: string }> {
+): Promise<{ install: Install; credential: string; returnTo: string | null }> {
   const pending = ctx.store.pendingConnects.get(query.state);
   ctx.store.pendingConnects.delete(query.state);
   if (!pending || pending.expiresAt.getTime() <= Date.now()) throw new HttpError(400, "unknown or expired connect");
-  if (pending.sessionId !== session.id) throw new HttpError(403, "this connect was started by another session");
+  if (pending.sessionId !== null && pending.sessionId !== session?.id) {
+    throw new HttpError(403, "this connect was started by another session");
+  }
   if (pending.binding.id !== bindingId) throw new HttpError(400, "callback does not match the connect's OAuth client");
   if ("error" in query) throw new HttpError(400, `the provider returned ${query.error}`);
 
   const install = getInstall(ctx, pending.installId);
-  authorize(session.principal, { type: "install.connect", install });
+  if (session && pending.sessionId !== null) authorize(session.principal, { type: "install.connect", install });
   const { binding } = oauthBinding(ctx, install, pending.credential);
   if (binding !== pending.binding) throw new HttpError(409, "the OAuth client changed during the connect");
 
@@ -110,7 +141,20 @@ export async function finishOAuthConnect(
   });
   if (!response.ok) throw new HttpError(502, `token exchange failed with ${response.status}`);
   install.connections.set(pending.credential, toConnection(binding, await response.json(), null));
-  return { install, credential: pending.credential };
+  return { install, credential: pending.credential, returnTo: pending.returnTo };
+}
+
+/** Each of an install's `needs.credentials`, and whether `credentials/get` would find it connected now. */
+export function credentialStatus(ctx: Context, install: Install): Record<string, CredentialStatus> {
+  const oauthBindings = getApp(ctx, install.appId).oauthBindings;
+  return Object.fromEntries(
+    Object.entries(manifestOf(ctx, install).needs.credentials ?? {}).map(([name, need]) => {
+      const connection = install.connections.get(name);
+      const connected =
+        connection?.type === "oauth2" ? connection.binding === oauthBindings.get(name) : connection?.type === need.type;
+      return [name, { type: need.type, connected }];
+    }),
+  );
 }
 
 /** Store the API key a tenant admin entered. Idempotent. */

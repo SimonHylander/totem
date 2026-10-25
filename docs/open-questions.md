@@ -7,3 +7,4 @@ Questions that block or shape upcoming decisions. Move each one into a decision 
 - **Streaming.** SSE on the same connection is decided ([0002](decisions/0002-json-rpc-over-http.md)) but `actions/invoke` is request-response. Shape of progress events and the final result for long-running actions.
 - **Triggers.** Manifest declares them. `events/emit` and subscription are unspecified.
 - **`packages/publish`.** The publisher ACL is dropped (see [0001](decisions/0001-protocol-is-the-contract.md)). Decide whether this package now means publishing apps to a registry, or remove it.
+- **End users in apps.** The events `/integrations` page has no login, and one deployment serves one install (see [0015](decisions/0015-apps-manage-their-ports.md)). Decide how an app signs in its users and creates a tenant install of itself for each new organization.

@@ -52,6 +52,8 @@ const eventsApp = await register(`${EVENTS}/totem`);
 let vite = await startEvents({});
 
 for (const { appId } of [hubspotApp, eventsApp]) await api(operator, "POST", `/api/apps/${appId}/initialize`);
+// Public apps appear on the events app's /integrations page (ADR 0015).
+await api(operator, "PUT", `/api/apps/${hubspotApp.appId}/visibility`, { visibility: "public" });
 const { redirectUri } = await api<{ redirectUri: string }>(operator, "PUT", `/api/apps/${hubspotApp.appId}/oauth-clients/hubspot`, {
   clientId,
   clientSecret,
@@ -77,7 +79,10 @@ Tenant acme has one events install, bound to its HubSpot install, with two event
 1. HubSpot must list this redirect URL (examples/hubspot/totem-test, pnpm hs:upload):
    ${redirectUri}
 
-2. Connect HubSpot for tenant acme. Sign in with the tenant admin token, then press Connect:
+2. Connect HubSpot for tenant acme. Press "Connect hubspot" on the integrations page, which also
+   enables and disables HubSpot:
+   ${EVENTS}/integrations
+   Or sign in on the platform with the tenant admin token, then press Connect:
    ${PLATFORM}/installs/${crm.installId}/connect/hubspot
    token: ${tenantAdmin}
 
