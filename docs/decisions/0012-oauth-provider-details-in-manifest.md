@@ -79,5 +79,6 @@ The change makes `authorizeUrl`, `tokenUrl` and `scopes` required on oauth2 need
 - Adding Salesforce or Notion is a manifest entry plus an operator binding. No platform code changes, unless the provider needs one of the optional quirk fields.
 - An operator must set the OAuth client again when an app changes its endpoints, and tenants then reconnect. That is the cost of sending secrets only to approved endpoints.
 - Connections are per install. A tenant with two HubSpot apps connects twice.
-- Platforms that run more than one process need compare-and-set on connection records. Otherwise concurrent refreshes break providers that rotate refresh tokens.
+- The platform runs as one process. Running more than one needs a cross-process lock around each refresh request, not only a conditional write. Otherwise two processes redeem the same refresh token, which breaks providers that rotate refresh tokens.
+- A new app version that adds scopes does not invalidate existing connections yet. Tenants keep tokens without the new scopes until they reconnect. This belongs with the version-negotiation open question.
 - The design sketch and its type checks are in [`docs/design/auth/`](../design/auth/). Run `docs/design/auth/check-sketch.sh` to recompile them.
