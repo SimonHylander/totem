@@ -11,7 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TotemRouteImport } from './routes/totem'
-import { Route as EventsInstallIdRouteImport } from './routes/events.$installId'
+import { Route as EventsEventIdRouteImport } from './routes/events.$eventId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -23,40 +23,40 @@ const TotemRoute = TotemRouteImport.update({
   path: '/totem',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EventsInstallIdRoute = EventsInstallIdRouteImport.update({
-  id: '/events/$installId',
-  path: '/events/$installId',
+const EventsEventIdRoute = EventsEventIdRouteImport.update({
+  id: '/events/$eventId',
+  path: '/events/$eventId',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/totem': typeof TotemRoute
-  '/events/$installId': typeof EventsInstallIdRoute
+  '/events/$eventId': typeof EventsEventIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/totem': typeof TotemRoute
-  '/events/$installId': typeof EventsInstallIdRoute
+  '/events/$eventId': typeof EventsEventIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/totem': typeof TotemRoute
-  '/events/$installId': typeof EventsInstallIdRoute
+  '/events/$eventId': typeof EventsEventIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/totem' | '/events/$installId'
+  fullPaths: '/' | '/totem' | '/events/$eventId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/totem' | '/events/$installId'
-  id: '__root__' | '/' | '/totem' | '/events/$installId'
+  to: '/' | '/totem' | '/events/$eventId'
+  id: '__root__' | '/' | '/totem' | '/events/$eventId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   TotemRoute: typeof TotemRoute
-  EventsInstallIdRoute: typeof EventsInstallIdRoute
+  EventsEventIdRoute: typeof EventsEventIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -75,11 +75,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TotemRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/events/$installId': {
-      id: '/events/$installId'
-      path: '/events/$installId'
-      fullPath: '/events/$installId'
-      preLoaderRoute: typeof EventsInstallIdRouteImport
+    '/events/$eventId': {
+      id: '/events/$eventId'
+      path: '/events/$eventId'
+      fullPath: '/events/$eventId'
+      preLoaderRoute: typeof EventsEventIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -88,7 +88,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   TotemRoute: TotemRoute,
-  EventsInstallIdRoute: EventsInstallIdRoute,
+  EventsEventIdRoute: EventsEventIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
