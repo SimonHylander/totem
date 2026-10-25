@@ -7,7 +7,7 @@ import {
   type PlatformMethods,
 } from "@totem/protocol";
 import { bearerToken } from "./access.js";
-import { getInstall, manifestOf } from "./apps.js";
+import { forwardPortCall, getInstall, manifestOf } from "./apps.js";
 import { verifyCallbackToken, type CallbackClaims } from "./callback-token.js";
 import { getCredential } from "./connections.js";
 import type { Context } from "./store.js";
@@ -41,11 +41,8 @@ const methods: Methods = {
     return {};
   },
 
-  // Port binding is not built yet. Every declared port is unbound.
-  async "actions/invoke"(ctx, claims, { port }) {
-    const ports = manifestOf(ctx, getInstall(ctx, claims.installId)).needs.actions ?? {};
-    if (!(port in ports)) throw new RpcError(ErrorCode.NotDeclared, `port "${port}" is not declared in the manifest`);
-    throw new RpcError(ErrorCode.PortUnbound, `port "${port}" has no provider bound`);
+  async "actions/invoke"(ctx, claims, { port, input }) {
+    return { output: await forwardPortCall(ctx, claims, port, input) };
   },
 };
 

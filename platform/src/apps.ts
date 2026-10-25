@@ -9,13 +9,16 @@ import {
   type Manifest,
 } from "@totem/protocol";
 import { HttpError, authorize, type Principal } from "./access.js";
-import { mintCallbackToken } from "./callback-token.js";
-import { Sealed, randomToken, type AppRecord, type Context, type Install } from "./store.js";
+import { mintCallbackToken, type CallbackClaims } from "./callback-token.js";
+import { Sealed, randomToken, type AppRecord, type Context, type Install, type PortBinding } from "./store.js";
 
 // Apps and installs: registration, manifest pull, install hooks and action invocation.
 
 /** The path apps call platform methods on. `initialize` sends `baseUrl + PLATFORM_METHODS_PATH`. */
 export const PLATFORM_METHODS_PATH = "/rpc";
+
+/** A port call from this depth fails, so a binding cycle cannot loop (ADR 0013). */
+const MAX_CALL_DEPTH = 8;
 
 /**
  * Register an app URL and issue its HMAC secret, shown once. The operator starts the app with the
@@ -48,19 +51,29 @@ export async function initializeApp(ctx: Context, principal: Principal, appId: s
   return manifest;
 }
 
-/** Install an app for a tenant and run its optional `install` hook. */
+/** Install an app for a tenant, bind its ports and run its optional `install` hook. */
 export async function createInstall(
   ctx: Context,
   principal: Principal,
   tenantId: string,
   appId: string,
   config: Record<string, unknown>,
+  bindings: Record<string, PortBinding> = {},
 ): Promise<Install> {
   authorize(principal, { type: "install.create", tenantId });
   const app = getApp(ctx, appId);
   if (!app.manifest) throw new HttpError(409, `app ${appId} has no manifest yet. Initialize it first.`);
 
-  const install: Install = { id: crypto.randomUUID(), tenantId, appId, config, connections: new Map(), state: new Map() };
+  const install: Install = {
+    id: crypto.randomUUID(),
+    tenantId,
+    appId,
+    config,
+    bindings: new Map(),
+    connections: new Map(),
+    state: new Map(),
+  };
+  for (const [port, binding] of Object.entries(bindings)) install.bindings.set(port, checkBinding(ctx, install, port, binding));
   ctx.store.installs.set(install.id, install);
   try {
     await callApp(ctx, app, "install", {
@@ -76,6 +89,13 @@ export async function createInstall(
   return install;
 }
 
+/** Set or replace one port binding on an existing install. */
+export function setBinding(ctx: Context, principal: Principal, installId: string, port: string, binding: PortBinding): void {
+  const install = getInstall(ctx, installId);
+  authorize(principal, { type: "install.bind", install });
+  install.bindings.set(port, checkBinding(ctx, install, port, binding));
+}
+
 /** Run one action and return its output. App failures surface as `RpcError`. */
 export async function invokeAction(
   ctx: Context,
@@ -86,15 +106,51 @@ export async function invokeAction(
 ): Promise<unknown> {
   const install = getInstall(ctx, installId);
   authorize(principal, { type: "install.invoke", install });
-  const app = getApp(ctx, install.appId);
+  return runAction(ctx, install, action, input, 0);
+}
+
+/**
+ * `actions/invoke` from an app: run the action its port is bound to, on the provider install, and
+ * return the provider's output or error unchanged.
+ */
+export async function forwardPortCall(ctx: Context, claims: CallbackClaims, port: string, input: unknown): Promise<unknown> {
+  const install = getInstall(ctx, claims.installId);
+  if (!(port in (manifestOf(ctx, install).needs.actions ?? {}))) {
+    throw new RpcError(ErrorCode.NotDeclared, `port "${port}" is not declared in the manifest`);
+  }
+  const binding = install.bindings.get(port);
+  const provider = binding && ctx.store.installs.get(binding.installId);
+  if (!binding || provider?.tenantId !== install.tenantId) {
+    throw new RpcError(ErrorCode.PortUnbound, `port "${port}" has no provider bound`);
+  }
+  if (claims.depth >= MAX_CALL_DEPTH) {
+    throw new RpcError(ErrorCode.InvalidRequest, `port calls nested deeper than ${MAX_CALL_DEPTH}`);
+  }
+  return runAction(ctx, provider, binding.action, input, claims.depth + 1);
+}
+
+async function runAction(ctx: Context, install: Install, action: string, input: unknown, depth: number): Promise<unknown> {
   const callId = crypto.randomUUID();
-  const { output } = await callApp(ctx, app, "actions/invoke", {
+  const { output } = await callApp(ctx, getApp(ctx, install.appId), "actions/invoke", {
     action,
     input,
     context: { tenantId: install.tenantId, installId: install.id, config: install.config, callId },
-    callbackToken: mintCallbackToken(ctx.store.callbackKey, install.id, callId),
+    callbackToken: mintCallbackToken(ctx.store.callbackKey, install.id, callId, depth),
   });
   return output;
+}
+
+/** A binding must name a declared port, an install of the same tenant, and an action that install provides. */
+function checkBinding(ctx: Context, install: Install, port: string, binding: PortBinding): PortBinding {
+  if (!(port in (manifestOf(ctx, install).needs.actions ?? {}))) {
+    throw new HttpError(422, `port ${port} is not declared in the manifest`);
+  }
+  const provider = getInstall(ctx, binding.installId);
+  if (provider.tenantId !== install.tenantId) throw new HttpError(403, `install ${binding.installId} belongs to another tenant`);
+  if (!(binding.action in (manifestOf(ctx, provider).provides.actions ?? {}))) {
+    throw new HttpError(422, `install ${binding.installId} does not provide ${binding.action}`);
+  }
+  return { installId: binding.installId, action: binding.action };
 }
 
 export function getApp({ store }: Context, appId: string): AppRecord {

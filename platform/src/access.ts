@@ -17,6 +17,7 @@ export type ManagementAction =
   | { type: "app.setOAuthClient" }
   | { type: "install.create"; tenantId: string }
   | { type: "install.connect"; install: Install }
+  | { type: "install.bind"; install: Install }
   | { type: "install.invoke"; install: Install };
 
 /**
@@ -64,6 +65,7 @@ export function can({ role }: Principal, action: ManagementAction): boolean {
     case "install.create":
       return action.tenantId === role.tenantId;
     case "install.connect":
+    case "install.bind":
     case "install.invoke":
       return action.install.tenantId === role.tenantId;
   }

@@ -15,15 +15,17 @@ export const principals = [
 type External = (request: Request) => Promise<Response> | null;
 
 /**
- * Requests to PLATFORM reach the platform and requests to APP reach the app, which only exists once
- * registration has issued its secret. Anything else goes to `external`, such as a fake provider.
+ * Requests to PLATFORM reach the platform and requests to an app URL reach that app, which only
+ * exists once registration has issued its secret. Anything else goes to `external`, such as a fake
+ * provider. `app` is served at APP. `register(other)` serves more apps at their own URLs.
  */
 export function testPlatform<M extends Manifest>(app: App<M>, external: External = () => null) {
-  let appHandler: ((request: Request) => Promise<Response>) | null = null;
+  const apps = new Map<string, (request: Request) => Promise<Response>>();
   const network: typeof fetch = async (input, init) => {
     const request = new Request(input, init);
     if (request.url.startsWith(PLATFORM)) return platform.handle(request);
-    if (request.url === APP && appHandler) return appHandler(request);
+    const appHandler = apps.get(request.url);
+    if (appHandler) return appHandler(request);
     const response = external(request);
     if (!response) throw new Error(`unreachable: ${request.url}`);
     return response;
@@ -42,17 +44,24 @@ export function testPlatform<M extends Manifest>(app: App<M>, external: External
     return { status: response.status, body: (await response.json()) as Record<string, unknown> };
   };
 
-  const register = async () => {
-    const { body } = await api("op", "POST", "/api/apps", { url: APP });
-    appHandler = createHandler(app, { secret: body["secret"] as string, fetch: network });
+  const register = async <N extends Manifest>(other?: App<N>) => {
+    const url = other ? `http://app${apps.size + 1}.test/` : APP;
+    const { body } = await api("op", "POST", "/api/apps", { url });
+    const options = { secret: body["secret"] as string, fetch: network };
+    apps.set(url, other ? createHandler(other, options) : createHandler(app, options));
     return body["appId"] as string;
   };
 
-  /** Register, initialize and install the app for tenant acme. */
-  const install = async () => {
-    const appId = await register();
+  /**
+   * Register, initialize and install an app for a tenant. Defaults to `app` and tenant acme.
+   * `bindings` go to the install request as they are.
+   */
+  const install = async <N extends Manifest>(
+    { other, tenant = "acme", bindings }: { other?: App<N>; tenant?: "acme" | "globex"; bindings?: unknown } = {},
+  ) => {
+    const appId = await register(other);
     await api("op", "POST", `/api/apps/${appId}/initialize`);
-    const { body } = await api("acme", "POST", "/api/tenants/acme/installs", { appId });
+    const { body } = await api(tenant, "POST", `/api/tenants/${tenant}/installs`, { appId, bindings });
     return { appId, installId: body["installId"] as string };
   };
 

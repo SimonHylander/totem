@@ -91,11 +91,16 @@ export type PendingConnect = {
   expiresAt: Date;
 };
 
+/** Where a port's calls go: an action on another install of the same tenant (ADR 0013). */
+export type PortBinding = { installId: string; action: string };
+
 export type Install = {
   id: string;
   tenantId: string;
   appId: string;
   config: Record<string, unknown>;
+  /** By port name. A declared port with no entry is unbound. */
+  bindings: Map<string, PortBinding>;
   /** By credential name. Deleting the install deletes them. */
   connections: Map<string, Connection>;
   /** Install-scoped key-value state for apps that declare `needs.state`. */

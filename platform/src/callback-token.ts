@@ -10,12 +10,14 @@ export type CallbackClaims = {
   callId: string | null;
   /** Unix seconds. */
   exp: number;
+  /** How many port calls led here. Zero for calls the platform starts (ADR 0013). */
+  depth: number;
 };
 
 const TTL_SECONDS = 5 * 60;
 
-export function mintCallbackToken(key: Sealed, installId: string, callId: string | null, now = Date.now()): string {
-  const claims: CallbackClaims = { installId, callId, exp: Math.floor(now / 1000) + TTL_SECONDS };
+export function mintCallbackToken(key: Sealed, installId: string, callId: string | null, depth = 0): string {
+  const claims: CallbackClaims = { installId, callId, depth, exp: Math.floor(Date.now() / 1000) + TTL_SECONDS };
   const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
   return `${payload}.${mac(key, payload)}`;
 }
@@ -28,7 +30,7 @@ export function verifyCallbackToken(key: Sealed, token: string, now = Date.now()
   const given = Buffer.from(signature);
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
   const claims = JSON.parse(Buffer.from(payload, "base64url").toString()) as CallbackClaims;
-  return claims.exp * 1000 > now ? claims : null;
+  return claims.exp * 1000 > now && Number.isInteger(claims.depth) ? claims : null;
 }
 
 function mac(key: Sealed, payload: string): string {

@@ -1,10 +1,10 @@
 import { RpcError } from "@totem/protocol";
 import { HttpError, authenticate, bearerToken, hashToken, type Principal } from "./access.js";
-import { PLATFORM_METHODS_PATH, createInstall, initializeApp, invokeAction, registerApp } from "./apps.js";
+import { PLATFORM_METHODS_PATH, createInstall, initializeApp, invokeAction, registerApp, setBinding } from "./apps.js";
 import { handleBrowser } from "./browser.js";
 import { connectApiKey, setOAuthClient } from "./connections.js";
 import { handlePlatformMethod } from "./platform-methods.js";
-import { createStore, type Context } from "./store.js";
+import { createStore, type Context, type PortBinding } from "./store.js";
 
 // The HTTP shell. Routes parse the request and call one operation. Operations authorize themselves.
 
@@ -48,8 +48,19 @@ const routes: Route[] = [
     method: "POST",
     pattern: /^\/api\/tenants\/(?<tenantId>[^/]+)\/installs$/,
     run: async (ctx, principal, { tenantId }, body) => {
-      const install = await createInstall(ctx, principal, tenantId!, string(body, "appId"), object(body, "config"));
+      const bindings = Object.fromEntries(
+        Object.entries(object(body, "bindings")).map(([port, value]) => [port, portBinding(value, `bindings.${port}`)]),
+      );
+      const install = await createInstall(ctx, principal, tenantId!, string(body, "appId"), object(body, "config"), bindings);
       return { installId: install.id };
+    },
+  },
+  {
+    method: "PUT",
+    pattern: /^\/api\/installs\/(?<installId>[^/]+)\/bindings\/(?<port>[^/]+)$/,
+    run: (ctx, principal, { installId, port }, body) => {
+      setBinding(ctx, principal, installId!, port!, portBinding(body, "body"));
+      return {};
     },
   },
   {
@@ -126,6 +137,12 @@ function object(body: Record<string, unknown>, field: string): Record<string, un
   const value = body[field] ?? {};
   if (!isObject(value)) throw new HttpError(400, `${field} must be a JSON object`);
   return value;
+}
+
+/** `{ installId, action }`, both non-empty strings. */
+function portBinding(value: unknown, field: string): PortBinding {
+  if (!isObject(value)) throw new HttpError(400, `${field} must be { installId, action }`);
+  return { installId: string(value, "installId"), action: string(value, "action") };
 }
 
 function string(body: Record<string, unknown>, field: string): string {
