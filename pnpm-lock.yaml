@@ -14,7 +14,7 @@ importers:
 
   examples/contacts:
     dependencies:
-      '@ipaas/sdk':
+      '@totem/sdk':
         specifier: workspace:*
         version: link:../../sdk/javascript-sdk
     devDependencies:
@@ -56,7 +56,7 @@ importers:
 
   sdk/javascript-sdk:
     dependencies:
-      '@ipaas/protocol':
+      '@totem/protocol':
         specifier: workspace:*
         version: link:../../protocol
       json-schema-to-ts:

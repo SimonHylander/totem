@@ -26,12 +26,12 @@ Decisions behind the shape: [0007](../docs/decisions/0007-manifest.md), [0008](.
 
 JSON-RPC 2.0 over HTTP POST. One request per HTTP call. Batch requests are not supported.
 
-- Platform to app: `POST <appUrl>`, header `X-Ipaas-Signature: t=<unix seconds>,v1=<hex hmac-sha256>`. The MAC is over `<t>.<raw body>` with the app's registration secret. Reject if `t` is more than 300 seconds from now.
+- Platform to app: `POST <appUrl>`, header `X-Totem-Signature: t=<unix seconds>,v1=<hex hmac-sha256>`. The MAC is over `<t>.<raw body>` with the app's registration secret. Reject if `t` is more than 300 seconds from now.
 - App to platform: `POST <platformUrl>`, header `Authorization: Bearer <callbackToken>`.
 
 Responses are HTTP 200 with a JSON-RPC envelope, including JSON-RPC errors. A failed signature or token check is HTTP 401 with an `Unauthorized` error envelope.
 
-`@ipaas/protocol` (this folder, `src/`) exports TypeScript types for these schemas, the signing helpers and a JSON-RPC client. Both the SDK and the platform use it.
+`@totem/protocol` (this folder, `src/`) exports TypeScript types for these schemas, the signing helpers and a JSON-RPC client. Both the SDK and the platform use it.
 
 ## Error codes
 

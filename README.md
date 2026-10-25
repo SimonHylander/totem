@@ -1,4 +1,4 @@
-# IPAAS
+# Totem
 
 A framework for building AI native integration platforms.
 

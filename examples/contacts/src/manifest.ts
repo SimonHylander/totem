@@ -1,4 +1,4 @@
-import type { Manifest } from "@ipaas/sdk";
+import type { Manifest } from "@totem/sdk";
 
 export const manifest = {
   name: "contacts",

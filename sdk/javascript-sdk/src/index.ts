@@ -5,4 +5,4 @@ export { fakePlatform, type FakePlatform } from "./fake-platform.js";
 export { createHandler } from "./handler.js";
 export { serve } from "./serve.js";
 export { AppError } from "./errors.js";
-export type { Manifest } from "@ipaas/protocol";
+export type { Manifest } from "@totem/protocol";

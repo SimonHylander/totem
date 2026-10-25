@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fakePlatform } from "@ipaas/sdk";
+import { fakePlatform } from "@totem/sdk";
 import { app } from "./app.js";
 
 describe("createContact", () => {

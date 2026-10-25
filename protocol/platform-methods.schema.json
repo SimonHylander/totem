@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ipaas.dev/protocol/1/platform-methods.schema.json",
+  "$id": "https://totem.dev/protocol/1/platform-methods.schema.json",
   "title": "Platform methods",
   "description": "JSON-RPC methods an app calls on the platform, authenticated with the callback token. Tenant and install come from the token, never from params.",
   "$defs": {
