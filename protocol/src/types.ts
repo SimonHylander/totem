@@ -108,7 +108,7 @@ export type AppMethods = {
   };
 };
 
-/** Methods an app calls on the platform. Tenant and install come from the bearer token. */
+/** Methods an app calls on the platform with a callback token. Tenant and install come from the token. */
 export type PlatformMethods = {
   "credentials/get": {
     params: { name: string };
@@ -128,6 +128,14 @@ export type PlatformMethods = {
   };
   "actions/invoke": {
     params: { port: string; input: unknown };
+    result: { output: unknown };
+  };
+};
+
+/** Methods an app calls on the platform signed with its HMAC secret, outside any call (ADR 0014). */
+export type SignedPlatformMethods = {
+  "actions/start": {
+    params: { installId: string; action: string; input: unknown };
     result: { output: unknown };
   };
 };

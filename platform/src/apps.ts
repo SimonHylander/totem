@@ -129,7 +129,11 @@ export async function forwardPortCall(ctx: Context, claims: CallbackClaims, port
   return runAction(ctx, provider, binding.action, input, claims.depth + 1);
 }
 
-async function runAction(ctx: Context, install: Install, action: string, input: unknown, depth: number): Promise<unknown> {
+/**
+ * Invoke an action on an install's app with a fresh call ID and callback token. `depth` counts the
+ * port calls that led here (ADR 0013). The app answers ActionNotFound for actions it does not provide.
+ */
+export async function runAction(ctx: Context, install: Install, action: string, input: unknown, depth: number): Promise<unknown> {
   const callId = crypto.randomUUID();
   const { output } = await callApp(ctx, getApp(ctx, install.appId), "actions/invoke", {
     action,
