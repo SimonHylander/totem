@@ -40,6 +40,8 @@ type MethodTable = Record<string, { params: unknown; result: unknown }>;
 
 type RpcOptions = {
   headers?: Record<string, string>;
+  /** Headers computed from the exact request body, such as `X-Totem-Signature`. */
+  sign?: (body: string) => Promise<Record<string, string>>;
   fetch?: typeof fetch;
 };
 
@@ -51,22 +53,23 @@ export async function rpc<T extends MethodTable, M extends keyof T & string>(
   url: string,
   method: M,
   params: T[M]["params"],
-  { headers = {}, fetch: doFetch = fetch }: RpcOptions = {},
+  { headers = {}, sign, fetch: doFetch = fetch }: RpcOptions = {},
 ): Promise<T[M]["result"]> {
   const request: JsonRpcRequest = { jsonrpc: "2.0", id: crypto.randomUUID(), method, params };
+  const body = JSON.stringify(request);
   const response = await doFetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json", ...headers },
-    body: JSON.stringify(request),
+    headers: { "content-type": "application/json", ...headers, ...(await sign?.(body)) },
+    body,
   });
-  const body = (await response.json()) as JsonRpcResponse;
-  if ("error" in body) {
-    throw new RpcError(body.error.code, body.error.message, body.error.data);
+  const reply = (await response.json()) as JsonRpcResponse;
+  if ("error" in reply) {
+    throw new RpcError(reply.error.code, reply.error.message, reply.error.data);
   }
   if (!response.ok) {
     throw new Error(`rpc ${method}: HTTP ${response.status}`);
   }
-  return body.result as T[M]["result"];
+  return reply.result as T[M]["result"];
 }
 
 export function isJsonRpcRequest(value: unknown): value is JsonRpcRequest {

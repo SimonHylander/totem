@@ -1,6 +1,7 @@
 packages:
   - "protocol"
   - "packages/*"
+  - "platform"
   - "sdk/javascript-sdk"
   - "examples/*"
 allowBuilds:
