@@ -9,7 +9,7 @@ import {
   type JsonRpcId,
   type JsonRpcResponse,
   type Manifest,
-} from "@ipaas/protocol";
+} from "@totem/protocol";
 import type { AnyApp, App } from "./define-app.js";
 import { platformClient } from "./platform.js";
 
@@ -98,7 +98,7 @@ export function createHandler<M extends Manifest>(typedApp: App<M>, options: Han
       return reply(parsed.id, { result });
     } catch (error) {
       if (error instanceof RpcError) return reply(parsed.id, failure(error));
-      console.error(`[ipaas] ${parsed.method} failed`, error);
+      console.error(`[totem] ${parsed.method} failed`, error);
       return reply(parsed.id, failure(new RpcError(ErrorCode.InternalError, "internal error")));
     }
   };

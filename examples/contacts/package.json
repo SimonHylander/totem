@@ -1,5 +1,5 @@
 {
-  "name": "@ipaas/example-contacts",
+  "name": "@totem/example-contacts",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "dev": "node --watch dist/server.js"
   },
   "dependencies": {
-    "@ipaas/sdk": "workspace:*"
+    "@totem/sdk": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

@@ -1,5 +1,5 @@
 {
-  "name": "@ipaas/sdk",
+  "name": "@totem/sdk",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,7 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ipaas/protocol": "workspace:*",
+    "@totem/protocol": "workspace:*",
     "json-schema-to-ts": "^3.1.1"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-import { rpc, type CredentialValue, type LogLevel, type PlatformMethods } from "@ipaas/protocol";
+import { rpc, type CredentialValue, type LogLevel, type PlatformMethods } from "@totem/protocol";
 
 /**
  * The driven port. Everything an app asks of the platform goes through here.

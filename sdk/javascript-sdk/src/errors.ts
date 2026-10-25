@@ -1,4 +1,4 @@
-import { RpcError } from "@ipaas/protocol";
+import { RpcError } from "@totem/protocol";
 
 const RESERVED_MIN = -32768;
 const RESERVED_MAX = -32000;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ErrorCode, SIGNATURE_HEADER, sign, type JsonRpcResponse, type PlatformMethods } from "@ipaas/protocol";
+import { ErrorCode, SIGNATURE_HEADER, sign, type JsonRpcResponse, type PlatformMethods } from "@totem/protocol";
 import { defineApp } from "./define-app.js";
 import { fakePlatform, type FakePlatform } from "./fake-platform.js";
 import { createHandler } from "./handler.js";

@@ -1,4 +1,4 @@
-import { ErrorCode, RpcError, type CredentialValue, type LogLevel, type Manifest } from "@ipaas/protocol";
+import { ErrorCode, RpcError, type CredentialValue, type LogLevel, type Manifest } from "@totem/protocol";
 import type { Platform } from "./platform.js";
 import type { Ports } from "./types.js";
 

@@ -12,7 +12,7 @@ The TypeScript SDK infers handler, port, credential and config types from the ma
 
 Codegen remains the rule for Python and Go.
 
-The `@ipaas/protocol` package carries hand-written TypeScript mirrors of the protocol schemas (`Manifest`, method tables, error codes) plus the shared signing and JSON-RPC helpers. Those mirrors must be kept in sync with the JSON files by hand until a generator is worth it.
+The `@totem/protocol` package carries hand-written TypeScript mirrors of the protocol schemas (`Manifest`, method tables, error codes) plus the shared signing and JSON-RPC helpers. Those mirrors must be kept in sync with the JSON files by hand until a generator is worth it.
 
 ## Consequences
 

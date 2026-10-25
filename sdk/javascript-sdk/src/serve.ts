@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { text } from "node:stream/consumers";
-import type { Manifest } from "@ipaas/protocol";
+import type { Manifest } from "@totem/protocol";
 import type { App } from "./define-app.js";
 import { createHandler } from "./handler.js";
 

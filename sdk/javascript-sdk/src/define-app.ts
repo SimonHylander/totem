@@ -1,4 +1,4 @@
-import type { CallContext, InstallContext, Manifest } from "@ipaas/protocol";
+import type { CallContext, InstallContext, Manifest } from "@totem/protocol";
 import type { Platform } from "./platform.js";
 import type { ActionInput, ActionName, ActionOutput, CallCtx, Handlers, InstallCtx, Ports } from "./types.js";
 

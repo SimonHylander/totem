@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ipaas.dev/protocol/1/app-methods.schema.json",
+  "$id": "https://totem.dev/protocol/1/app-methods.schema.json",
   "title": "App methods",
   "description": "JSON-RPC methods the platform calls on an app. One $def per method with `params` and `result`.",
   "$defs": {

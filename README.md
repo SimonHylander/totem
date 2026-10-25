@@ -1,4 +1,6 @@
-# IPAAS
+# Totem
+
+> **Note:** This project was formerly known as "IPAAS".
 
 A framework for building AI native integration platforms.
 
