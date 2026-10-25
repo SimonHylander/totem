@@ -57,6 +57,18 @@ describe("register", () => {
   });
 });
 
+describe("eventInfo", () => {
+  it("counts seats left, never below zero", async () => {
+    const platform = withCrm();
+    expect(await app.invoke("eventInfo", {}, { platform, context })).toEqual({ eventName: "Totem launch", capacity: 2, seatsLeft: 2 });
+
+    for (const email of ["ada@acme.com", "bob@acme.com", "cy@acme.com"]) {
+      await app.invoke("register", { email }, { platform, context });
+    }
+    expect(await app.invoke("eventInfo", {}, { platform, context })).toMatchObject({ seatsLeft: 0 });
+  });
+});
+
 describe("checkIn and listAttendees", () => {
   it("checks in registered attendees only and lists both groups", async () => {
     const platform = withCrm();
