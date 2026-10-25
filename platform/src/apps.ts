@@ -24,7 +24,13 @@ export const PLATFORM_METHODS_PATH = "/rpc";
 export function registerApp({ store }: Context, principal: Principal, url: string): { appId: string; secret: string } {
   authorize(principal, { type: "app.register" });
   const secret = randomToken();
-  const app: AppRecord = { id: crypto.randomUUID(), url, secret: new Sealed(secret), manifest: null };
+  const app: AppRecord = {
+    id: crypto.randomUUID(),
+    url,
+    secret: new Sealed(secret),
+    manifest: null,
+    oauthBindings: new Map(),
+  };
   store.apps.set(app.id, app);
   return { appId: app.id, secret };
 }

@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createHandler, defineApp, type Manifest } from "@totem/sdk";
-import { createPlatform } from "./http.js";
-
-const PLATFORM = "http://platform.test";
-const APP = "http://app.test/";
+import { defineApp, type Manifest } from "@totem/sdk";
+import { APP, PLATFORM, testPlatform } from "./test-network.js";
 
 const manifest = {
   name: "mailer",
@@ -35,52 +32,10 @@ const mailer = defineApp(manifest, {
   },
 });
 
-const principals = [
-  { token: "op", principal: { id: "simon", role: { name: "operator" } } },
-  { token: "acme", principal: { id: "alice", role: { name: "tenantAdmin", tenantId: "acme" } } },
-  { token: "globex", principal: { id: "bob", role: { name: "tenantAdmin", tenantId: "globex" } } },
-] as const;
-
-/**
- * Wire a platform and an app together in memory. Requests to PLATFORM reach the platform and
- * requests to APP reach the app, which only exists once registration has issued its secret.
- */
-function setup(app: ReturnType<typeof defineApp> = mailer) {
-  let appHandler: ((request: Request) => Promise<Response>) | null = null;
-  const network: typeof fetch = async (input, init) => {
-    const request = new Request(input, init);
-    if (request.url.startsWith(PLATFORM)) return platform.handle(request);
-    if (request.url === APP && appHandler) return appHandler(request);
-    throw new Error(`unreachable: ${request.url}`);
-  };
-  const platform = createPlatform({ baseUrl: PLATFORM, principals: [...principals], fetch: network });
-
-  const api = async (token: string, method: string, path: string, body?: unknown) => {
-    const response = await platform.handle(
-      new Request(PLATFORM + path, {
-        method,
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        ...(body !== undefined && { body: JSON.stringify(body) }),
-      }),
-    );
-    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
-  };
-
-  const register = async () => {
-    const { body } = await api("op", "POST", "/api/apps", { url: APP });
-    appHandler = createHandler(app, { secret: body["secret"] as string, fetch: network });
-    return body["appId"] as string;
-  };
-
-  return { api, register, network };
-}
-
+/** The mailer installed for tenant acme. */
 async function installed() {
-  const env = setup();
-  const appId = await env.register();
-  await env.api("op", "POST", `/api/apps/${appId}/initialize`);
-  const { body } = await env.api("acme", "POST", "/api/tenants/acme/installs", { appId });
-  return { ...env, appId, installId: body["installId"] as string };
+  const env = testPlatform(mailer);
+  return { ...env, ...(await env.install()) };
 }
 
 describe("platform", () => {
@@ -108,14 +63,14 @@ describe("platform", () => {
   });
 
   it("rejects an install config that is not an object", async () => {
-    const env = setup();
+    const env = testPlatform(mailer);
     const appId = await env.register();
     await env.api("op", "POST", `/api/apps/${appId}/initialize`);
     expect((await env.api("acme", "POST", "/api/tenants/acme/installs", { appId, config: "x" })).status).toBe(400);
   });
 
   it("rejects unknown management tokens and callback tokens", async () => {
-    const { api, network } = setup();
+    const { api, network } = testPlatform(mailer);
 
     expect((await api("nope", "POST", "/api/apps", { url: APP })).status).toBe(401);
     const forged = await network(`${PLATFORM}/rpc`, {
@@ -150,7 +105,7 @@ describe("platform", () => {
       } as const satisfies Manifest,
       { actions: { send: async () => ({ key: "", sent: 0 }) } },
     );
-    const { api, register } = setup(evil);
+    const { api, register } = testPlatform(evil);
     const appId = await register();
 
     const { status } = await api("op", "POST", `/api/apps/${appId}/initialize`);

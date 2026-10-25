@@ -1,7 +1,8 @@
 import { RpcError } from "@totem/protocol";
 import { HttpError, authenticate, bearerToken, hashToken, type Principal } from "./access.js";
 import { PLATFORM_METHODS_PATH, createInstall, initializeApp, invokeAction, registerApp } from "./apps.js";
-import { connectApiKey } from "./connections.js";
+import { handleBrowser } from "./browser.js";
+import { connectApiKey, setOAuthClient } from "./connections.js";
 import { handlePlatformMethod } from "./platform-methods.js";
 import { createStore, type Context } from "./store.js";
 
@@ -35,6 +36,15 @@ const routes: Route[] = [
     run: async (ctx, principal, { appId }) => ({ manifest: await initializeApp(ctx, principal, appId!) }),
   },
   {
+    method: "PUT",
+    pattern: /^\/api\/apps\/(?<appId>[^/]+)\/oauth-clients\/(?<name>[^/]+)$/,
+    run: (ctx, principal, { appId, name }, body) =>
+      setOAuthClient(ctx, principal, appId!, name!, {
+        clientId: string(body, "clientId"),
+        clientSecret: string(body, "clientSecret"),
+      }),
+  },
+  {
     method: "POST",
     pattern: /^\/api\/tenants\/(?<tenantId>[^/]+)\/installs$/,
     run: async (ctx, principal, { tenantId }, body) => {
@@ -59,7 +69,7 @@ const routes: Route[] = [
   },
 ];
 
-/** Build the platform. `handle` serves the management API and the platform-methods endpoint. */
+/** Build the platform. `handle` serves the management API, the browser pages and the platform-methods endpoint. */
 export function createPlatform({ baseUrl, principals, allowLocalhost = false, fetch: doFetch = fetch }: PlatformOptions) {
   const store = createStore(new Map(principals.map(({ token, principal }) => [hashToken(token), principal])));
   const ctx: Context = { store, baseUrl, allowLocalhost, fetch: doFetch };
@@ -67,6 +77,7 @@ export function createPlatform({ baseUrl, principals, allowLocalhost = false, fe
   async function handle(request: Request): Promise<Response> {
     const { pathname } = new URL(request.url);
     if (request.method === "POST" && pathname === PLATFORM_METHODS_PATH) return handlePlatformMethod(ctx, request);
+    if (!pathname.startsWith("/api/")) return handleBrowser(ctx, request);
 
     for (const route of routes) {
       const match = route.method === request.method ? route.pattern.exec(pathname) : null;
