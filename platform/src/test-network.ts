@@ -21,6 +21,8 @@ type External = (request: Request) => Promise<Response> | null;
  */
 export function testPlatform<M extends Manifest>(app: App<M>, external: External = () => null) {
   const apps = new Map<string, (request: Request) => Promise<Response>>();
+  /** HMAC secrets by app ID, as registration returned them. */
+  const secrets = new Map<string, string>();
   const network: typeof fetch = async (input, init) => {
     const request = new Request(input, init);
     if (request.url.startsWith(PLATFORM)) return platform.handle(request);
@@ -49,6 +51,7 @@ export function testPlatform<M extends Manifest>(app: App<M>, external: External
     const { body } = await api("op", "POST", "/api/apps", { url });
     const options = { secret: body["secret"] as string, fetch: network };
     apps.set(url, other ? createHandler(other, options) : createHandler(app, options));
+    secrets.set(body["appId"] as string, options.secret);
     return body["appId"] as string;
   };
 
@@ -86,5 +89,5 @@ export function testPlatform<M extends Manifest>(app: App<M>, external: External
     };
   };
 
-  return { platform, network, api, register, install, browser };
+  return { platform, network, api, register, install, browser, secrets };
 }

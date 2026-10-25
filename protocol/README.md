@@ -27,7 +27,7 @@ Decisions behind the shape: [0007](../docs/decisions/0007-manifest.md), [0008](.
 JSON-RPC 2.0 over HTTP POST. One request per HTTP call. Batch requests are not supported.
 
 - Platform to app: `POST <appUrl>`, header `X-Totem-Signature: t=<unix seconds>,v1=<hex hmac-sha256>`. The MAC is over `<t>.<raw body>` with the app's registration secret. Reject if `t` is more than 300 seconds from now.
-- App to platform: `POST <platformUrl>`, header `Authorization: Bearer <callbackToken>`.
+- App to platform: `POST <platformUrl>`, header `Authorization: Bearer <callbackToken>`. `actions/start` is the exception: the app signs it with `X-Totem-Signature` and its registration secret instead ([0014](../docs/decisions/0014-apps-start-their-own-actions.md)).
 
 Responses are HTTP 200 with a JSON-RPC envelope, including JSON-RPC errors. A failed signature or token check is HTTP 401 with an `Unauthorized` error envelope.
 
