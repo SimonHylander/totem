@@ -1,11 +1,9 @@
 import { ErrorCode, RpcError, type CredentialValue, type LogLevel, type Manifest } from "@totem/protocol";
 import type { Platform } from "./platform.js";
-import type { Ports } from "./types.js";
-
-type CredentialNames<M> = M extends { needs: { credentials: infer C } } ? keyof C & string : never;
+import type { Credentials, Ports } from "./types.js";
 
 type FakeOptions<M> = {
-  credentials?: Partial<Record<CredentialNames<M>, CredentialValue>>;
+  credentials?: Partial<Credentials<M>>;
   state?: Record<string, unknown>;
   ports?: Partial<Ports<M>>;
 };

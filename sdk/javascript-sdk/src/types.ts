@@ -1,5 +1,5 @@
 import type { FromSchema, JSONSchema } from "json-schema-to-ts";
-import type { CredentialValue, LogLevel, Manifest, Signature } from "@totem/protocol";
+import type { CredentialValueFor, LogLevel, Manifest, Signature } from "@totem/protocol";
 
 // Everything here is derived from the manifest literal. Authors write the
 // manifest once and get typed handlers, ports, credentials and config.
@@ -14,7 +14,10 @@ type PortDefs<M> = M extends { needs: { actions: infer P extends Record<string, 
   ? P
   : Record<never, never>;
 
-type CredentialNames<M> = M extends { needs: { credentials: infer C } } ? keyof C & string : never;
+type CredentialNeeds<M> = M extends { needs: { credentials?: infer C } } ? NonNullable<C> : Record<never, never>;
+
+/** Credential names mapped to the value `credentials/get` returns for each. */
+export type Credentials<M> = { [K in keyof CredentialNeeds<M> & string]: CredentialValueFor<CredentialNeeds<M>[K]> };
 
 type Config<M> = M extends { config: infer C extends JSONSchema } ? FromSchema<C> : Record<string, unknown>;
 
@@ -47,7 +50,7 @@ export type InstallCtx<M> = {
   tenantId: string;
   installId: string;
   config: Config<M>;
-  credentials: { get(name: CredentialNames<M>): Promise<CredentialValue> };
+  credentials: { get<K extends keyof Credentials<M>>(name: K): Promise<Credentials<M>[K]> };
   log: Logger;
 } & StatePort<M>;
 

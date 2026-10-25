@@ -18,10 +18,32 @@ export type Trigger = {
   payload: JSONSchema;
 };
 
-export type CredentialNeed = {
-  type: "oauth2" | "apiKey";
-  scopes?: readonly string[];
+/**
+ * An https URL, or http on localhost for development. Mirrors `$defs/endpoint`. The template is
+ * approximate, so the platform also parses each endpoint and checks the real hostname.
+ */
+export type Endpoint = `https://${string}` | `http://localhost:${string}` | `http://localhost/${string}`;
+
+/**
+ * OAuth 2.0 authorization code grant. The app declares the provider's endpoints. The platform runs
+ * consent, storage and refresh against them once an operator pins them (ADR 0012).
+ */
+export type OAuth2Need = {
+  type: "oauth2";
+  authorizeUrl: Endpoint;
+  /** Receives the client secret and refresh tokens. */
+  tokenUrl: Endpoint;
+  /** Sent space-separated. The tenant consents to exactly these. */
+  scopes: readonly string[];
 };
+
+/** A static key the tenant enters when connecting. */
+export type ApiKeyNeed = {
+  type: "apiKey";
+};
+
+/** One member per credential type, each with only its own fields. */
+export type CredentialNeed = OAuth2Need | ApiKeyNeed;
 
 /** What an app provides and what it needs. Returned from `initialize`. */
 export type Manifest = {
@@ -56,6 +78,9 @@ export type CallContext = InstallContext & {
 export type CredentialValue =
   | { type: "oauth2"; accessToken: string; expiresAt: string }
   | { type: "apiKey"; key: string };
+
+/** The value `credentials/get` returns for a declared need. */
+export type CredentialValueFor<N> = N extends { type: infer T } ? Extract<CredentialValue, { type: T }> : never;
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 

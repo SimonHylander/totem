@@ -11,7 +11,6 @@ export const app = defineApp(manifest, {
   actions: {
     createContact: async (input, ctx) => {
       const credential = await ctx.credentials.get("crm");
-      if (credential.type !== "apiKey") throw new Error("crm credential must be an apiKey");
 
       const enriched = await ctx.ports.enrichPerson({ email: input.email });
       const contact = await crmCreateContact(credential.key, { ...input, pipeline: ctx.config.pipeline });

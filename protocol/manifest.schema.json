@@ -71,18 +71,36 @@
         }
       }
     },
+    "endpoint": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^(https://|http://localhost[:/])",
+      "description": "An https URL, or http on localhost for development. The platform checks the parsed hostname."
+    },
     "credential": {
-      "type": "object",
-      "required": ["type"],
-      "additionalProperties": false,
-      "properties": {
-        "type": { "enum": ["oauth2", "apiKey"] },
-        "scopes": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "OAuth2 scopes. Ignored for apiKey."
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "OAuth 2.0 authorization code grant. The platform runs consent, storage and refresh against these endpoints once an operator pins them (ADR 0012).",
+          "required": ["type", "authorizeUrl", "tokenUrl", "scopes"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "oauth2" },
+            "authorizeUrl": { "$ref": "#/$defs/endpoint" },
+            "tokenUrl": { "$ref": "#/$defs/endpoint" },
+            "scopes": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        {
+          "type": "object",
+          "description": "A static key the tenant enters when connecting.",
+          "required": ["type"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "apiKey" }
+          }
         }
-      }
+      ]
     },
     "needs": {
       "type": "object",
