@@ -17,7 +17,7 @@ The HubSpot slice builds this minimum:
 - **Management API tokens.** They are seeded from platform config and stored as SHA-256 digests. Each token resolves to a `Principal` (`{ id, role }`). Tokens are accepted only on `/api/*`.
 - **Two roles.** `operator` runs the deployment, registers apps and sets OAuth clients. `tenantAdmin` is scoped to one `tenantId` and installs, connects and invokes within that tenant.
 - **One check.** The rule is `can(principal, action)`. Every management function calls it before it acts, so a route cannot skip it. An install-scoped action carries the stored `Install` record, so the tenant that `can` compares always comes from the store and never from the request.
-- **A browser session.** `POST /session` exchanges a management token for an HttpOnly, SameSite=Lax cookie. OAuth consent needs it, because the provider redirect is a plain browser GET. The platform must know that the browser finishing a connect is the one that started it (RFC 6749 section 10.12).
+- **A browser session.** `POST /session` exchanges a management token for an HttpOnly, SameSite=Lax cookie, marked Secure outside localhost. Mutating routes that accept the cookie also check a CSRF token. OAuth consent needs it, because the provider redirect is a plain browser GET. The platform must know that the browser finishing a connect is the one that started it (RFC 6749 section 10.12).
 
 These items are deferred. Each attaches to the same seams without changing the protocol.
 

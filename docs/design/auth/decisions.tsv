@@ -16,3 +16,4 @@ ts	phase	decision	why	evidence	result
 2026-10-25T14:11:43Z	fix	noted that endpoints are checked at runtime and that the binding id comes from the pending connect	F14 and F15 were non-blocking notes	sketch/types.ts Endpoint and finishOAuthConnect	done
 2026-10-25T14:13:28Z	verify	round-3 GPT review found F12 to F15 fixed and no new blockers	definition of done item 4	docs/design/auth/review3.md	VERIFIED, 0 blockers
 2026-10-25T14:13:28Z	verify	checked all four parts of the definition of done	an ADR per layer, every connector type mapped, the sketch compiles, the review is clean	ADR 0011, ADR 0012 table C1 to C10, check-sketch.sh exit 0, review3.md	VERIFIED
+2026-10-25T14:16:53Z	audit	GPT trail audit raised 5 flags. Fixed F2 (Secure cookie and CSRF in 0011), F5 (single process and a refresh lock in 0012) and F4 (scope changes recorded as open). F1 and F3 go to Simon	the show-me-your-work audit by a different model family	PR 2 follow-up commit	3 fixed, 2 open for Simon
