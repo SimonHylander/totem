@@ -8,7 +8,7 @@
     "auth": {
       "type": "oauth",
       "redirectUrls": [
-        "http://localhost:3000"
+        "http://localhost:3000/oauth/callback/ePc11HoadV8gpdKcqIzOo8"
       ],
       "requiredScopes": [
         "oauth",
