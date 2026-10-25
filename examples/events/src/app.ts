@@ -69,6 +69,12 @@ export const app = defineApp(manifest, {
       return { checkedIn: true };
     },
 
+    eventInfo: async (_input, ctx) => {
+      const registered = (await loadAttendees(ctx.state)).filter((a) => a.status === "registered").length;
+      const { eventName, capacity } = ctx.config;
+      return { eventName, capacity, seatsLeft: Math.max(capacity - registered, 0) };
+    },
+
     listAttendees: async (_input, ctx) => {
       const attendees = await loadAttendees(ctx.state);
       const view = ({ status: _status, ...rest }: Attendee) => rest;

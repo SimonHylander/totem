@@ -50,6 +50,20 @@ export const manifest = {
           additionalProperties: false,
         },
       },
+      eventInfo: {
+        description: "The event's name, capacity and seats left, for display.",
+        input: { type: "object", additionalProperties: false },
+        output: {
+          type: "object",
+          required: ["eventName", "capacity", "seatsLeft"],
+          properties: {
+            eventName: { type: "string" },
+            capacity: { type: "integer" },
+            seatsLeft: { type: "integer" },
+          },
+          additionalProperties: false,
+        },
+      },
       listAttendees: {
         description: "Registered attendees and the waitlist, each in registration order.",
         input: { type: "object", additionalProperties: false },
