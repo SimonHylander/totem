@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@totem/protocol": "workspace:*",
+    "effect": "^4.0.6",
     "json-schema-to-ts": "^3.1.1"
   },
   "devDependencies": {
