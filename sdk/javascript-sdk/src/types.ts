@@ -27,6 +27,7 @@ type OutputOf<S> = S extends { output: infer O } ? Infer<O> : never;
 export type ActionInput<M, K extends keyof ActionDefs<M>> = InputOf<ActionDefs<M>[K]>;
 export type ActionOutput<M, K extends keyof ActionDefs<M>> = OutputOf<ActionDefs<M>[K]>;
 export type ActionName<M> = keyof ActionDefs<M> & string;
+export type PortName<M> = keyof PortDefs<M> & string;
 
 /** Typed functions for each port in `needs.actions`. */
 export type Ports<M> = {

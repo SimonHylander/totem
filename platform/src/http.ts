@@ -1,10 +1,18 @@
 import { RpcError } from "@totem/protocol";
 import { HttpError, authenticate, bearerToken, hashToken, type Principal } from "./access.js";
-import { PLATFORM_METHODS_PATH, createInstall, initializeApp, invokeAction, registerApp, setBinding } from "./apps.js";
+import {
+  PLATFORM_METHODS_PATH,
+  createInstall,
+  initializeApp,
+  invokeAction,
+  registerApp,
+  setBinding,
+  setVisibility,
+} from "./apps.js";
 import { handleBrowser } from "./browser.js";
 import { connectApiKey, setOAuthClient } from "./connections.js";
 import { handlePlatformMethod } from "./platform-methods.js";
-import { createStore, type Context, type PortBinding } from "./store.js";
+import { createStore, type Context, type PortBinding, type Visibility } from "./store.js";
 
 // The HTTP shell. Routes parse the request and call one operation. Operations authorize themselves.
 
@@ -34,6 +42,14 @@ const routes: Route[] = [
     method: "POST",
     pattern: /^\/api\/apps\/(?<appId>[^/]+)\/initialize$/,
     run: async (ctx, principal, { appId }) => ({ manifest: await initializeApp(ctx, principal, appId!) }),
+  },
+  {
+    method: "PUT",
+    pattern: /^\/api\/apps\/(?<appId>[^/]+)\/visibility$/,
+    run: (ctx, principal, { appId }, body) => {
+      setVisibility(ctx, principal, appId!, visibility(body["visibility"]));
+      return {};
+    },
   },
   {
     method: "PUT",
@@ -143,6 +159,11 @@ function object(body: Record<string, unknown>, field: string): Record<string, un
 function portBinding(value: unknown, field: string): PortBinding {
   if (!isObject(value)) throw new HttpError(400, `${field} must be { installId, action }`);
   return { installId: string(value, "installId"), action: string(value, "action") };
+}
+
+function visibility(value: unknown): Visibility {
+  if (value !== "public" && value !== "internal") throw new HttpError(400, `visibility must be "public" or "internal"`);
+  return value;
 }
 
 function string(body: Record<string, unknown>, field: string): string {

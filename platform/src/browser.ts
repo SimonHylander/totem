@@ -9,7 +9,8 @@ import type { Context } from "./store.js";
 //   POST /signin                           management token in, session cookie out
 //   GET  /installs/:id/connect/:credential page with a Connect button
 //   POST /installs/:id/connect/:credential start the connect, redirect to the provider
-//   GET  /oauth/callback/:binding          the provider's redirect
+//   GET  /oauth/callback/:binding          the provider's redirect. Connects an app began through
+//                                          `ports/connect` need no session and return to the app (ADR 0015).
 
 const COOKIE = "totem_session";
 const CONNECT = /^\/installs\/(?<installId>[^/]+)\/connect\/(?<name>[^/]+)$/;
@@ -41,9 +42,9 @@ export async function handleBrowser(ctx: Context, request: Request): Promise<Res
 
     const callback = CALLBACK.exec(url.pathname)?.groups;
     if (callback && request.method === "GET") {
-      if (!session) throw new HttpError(403, "sign in, then start the connect again");
-      const { install, credential } = await finishOAuthConnect(ctx, session, callback["bindingId"]!, callbackQuery(url));
-      return page(200, "Connected", `<p>${escape(credential)} is connected for tenant ${escape(install.tenantId)}.</p>`);
+      const done = await finishOAuthConnect(ctx, session, callback["bindingId"]!, callbackQuery(url));
+      if (done.returnTo) return redirect(done.returnTo);
+      return page(200, "Connected", `<p>${escape(done.credential)} is connected for tenant ${escape(done.install.tenantId)}.</p>`);
     }
   } catch (error) {
     if (error instanceof HttpError) return page(error.status, "Error", `<p>${escape(error.message)}</p>`);

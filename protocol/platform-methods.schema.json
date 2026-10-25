@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://totem.dev/protocol/1/platform-methods.schema.json",
   "title": "Platform methods",
-  "description": "JSON-RPC methods an app calls on the platform, authenticated with the callback token. Tenant and install come from the token, never from params. The exception is `actions/start`, which the app signs with its HMAC secret (ADR 0014).",
+  "description": "JSON-RPC methods an app calls on the platform, authenticated with the callback token. Tenant and install come from the token, never from params. The exceptions are `actions/start` (ADR 0014) and the catalog and port methods (ADR 0015), which the app signs with its HMAC secret and which name one of its installs.",
   "$defs": {
     "credentials/get": {
       "params": {
@@ -128,6 +128,148 @@
         "additionalProperties": false,
         "properties": {
           "output": { "description": "Valid against the action's `output` schema." }
+        }
+      }
+    },
+    "apps/list": {
+      "description": "Every public app other than the caller, with the actions each provides. Signed like `actions/start`.",
+      "params": {
+        "type": "object",
+        "required": ["installId"],
+        "additionalProperties": false,
+        "properties": {
+          "installId": { "type": "string", "description": "An install of the calling app." }
+        }
+      },
+      "result": {
+        "type": "object",
+        "required": ["apps"],
+        "additionalProperties": false,
+        "properties": {
+          "apps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["appId", "name", "actions"],
+              "additionalProperties": false,
+              "properties": {
+                "appId": { "type": "string" },
+                "name": { "type": "string", "description": "The app's manifest name." },
+                "description": { "type": "string" },
+                "actions": {
+                  "type": "object",
+                  "description": "The app's manifest `provides.actions`.",
+                  "additionalProperties": { "$ref": "https://totem.dev/protocol/1/manifest.schema.json#/$defs/signature" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ports/list": {
+      "description": "Every port in the install's `needs.actions`, with what it is bound to or null. Signed like `actions/start`.",
+      "params": {
+        "type": "object",
+        "required": ["installId"],
+        "additionalProperties": false,
+        "properties": {
+          "installId": { "type": "string", "description": "An install of the calling app." }
+        }
+      },
+      "result": {
+        "type": "object",
+        "required": ["ports"],
+        "additionalProperties": false,
+        "properties": {
+          "ports": {
+            "type": "object",
+            "additionalProperties": {
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "required": ["appId", "name", "action", "credentials"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "appId": { "type": "string" },
+                    "name": { "type": "string", "description": "The provider's manifest name." },
+                    "action": { "type": "string" },
+                    "credentials": {
+                      "type": "object",
+                      "description": "The provider's `needs.credentials`, each with whether the provider install has it connected.",
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": ["type", "connected"],
+                        "additionalProperties": false,
+                        "properties": {
+                          "type": { "enum": ["oauth2", "apiKey"] },
+                          "connected": { "type": "boolean" }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "ports/bind": {
+      "description": "Bind a port to an action of a public app. The platform uses the tenant's first install of that app, or creates one with empty config. Signed like `actions/start`.",
+      "params": {
+        "type": "object",
+        "required": ["installId", "port", "appId", "action"],
+        "additionalProperties": false,
+        "properties": {
+          "installId": { "type": "string", "description": "An install of the calling app." },
+          "port": { "type": "string", "description": "Key in the app's `needs.actions`." },
+          "appId": { "type": "string", "description": "A public app from `apps/list`." },
+          "action": { "type": "string", "description": "Key in that app's `provides.actions`." }
+        }
+      },
+      "result": { "type": "object", "additionalProperties": false }
+    },
+    "ports/unbind": {
+      "description": "Remove a port's binding. The provider install stays. Signed like `actions/start`.",
+      "params": {
+        "type": "object",
+        "required": ["installId", "port"],
+        "additionalProperties": false,
+        "properties": {
+          "installId": { "type": "string", "description": "An install of the calling app." },
+          "port": { "type": "string", "description": "Key in the app's `needs.actions`." }
+        }
+      },
+      "result": { "type": "object", "additionalProperties": false }
+    },
+    "ports/connect": {
+      "description": "Start an OAuth connect for an oauth2 credential of the install bound to a port. The app sends the browser to `url`. After the provider's consent the platform redirects to `returnTo`. Signed like `actions/start`.",
+      "params": {
+        "type": "object",
+        "required": ["installId", "port", "credential", "returnTo"],
+        "additionalProperties": false,
+        "properties": {
+          "installId": { "type": "string", "description": "An install of the calling app." },
+          "port": { "type": "string", "description": "Key in the app's `needs.actions`." },
+          "credential": {
+            "type": "string",
+            "description": "Key in the provider's `needs.credentials`, of type oauth2."
+          },
+          "returnTo": {
+            "type": "string",
+            "format": "uri",
+            "description": "Must have the origin of the calling app's registered URL."
+          }
+        }
+      },
+      "result": {
+        "type": "object",
+        "required": ["url"],
+        "additionalProperties": false,
+        "properties": {
+          "url": { "type": "string", "format": "uri", "description": "The provider's authorize URL." }
         }
       }
     }
