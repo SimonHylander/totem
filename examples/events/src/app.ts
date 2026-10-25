@@ -1,9 +1,10 @@
-import { defineApp, type CallCtx } from "@totem/sdk";
+import { AppError, defineApp, type CallCtx } from "@totem/sdk";
 import { manifest } from "./manifest.js";
 
-// One install runs one event. All attendees live in install state under one key, in registration
-// order. State has no compare-and-set, so two calls that land at the same moment read the same list
-// and the second write wins: an attendee can be lost and the last seat can be given twice.
+// One install serves one tenant, and the tenant runs many events through it. Each event lives in
+// install state under `event:<id>`, and `events` lists the IDs oldest first. State has no
+// compare-and-set, so two calls that land at the same moment read the same event and the second
+// write wins: an attendee can be lost and the last seat can be given twice.
 
 type Attendee = {
   email: string;
@@ -14,22 +15,51 @@ type Attendee = {
   crmContactId: string | null;
 };
 
-const ATTENDEES = "attendees";
+type Event = { id: string; name: string; capacity: number; attendees: Attendee[] };
+
+/** `eventInfo`, `register` and friends answer this for an event ID the install does not have. */
+export const EVENT_NOT_FOUND = 2001;
 
 type State = CallCtx<typeof manifest>["state"];
 
-/** The attendee list, empty for a new event. */
-async function loadAttendees(state: State): Promise<Attendee[]> {
-  return (await state.get<Attendee[]>(ATTENDEES)) ?? [];
+const EVENTS = "events";
+const eventKey = (id: string) => `event:${id}`;
+
+async function loadEvent(state: State, id: string): Promise<Event> {
+  const event = await state.get<Event>(eventKey(id));
+  if (!event) throw new AppError(EVENT_NOT_FOUND, `no event ${id}`);
+  return event;
+}
+
+const saveEvent = (state: State, event: Event) => state.set(eventKey(event.id), event);
+
+function summary({ id, name, capacity, attendees }: Event) {
+  const registered = attendees.filter((a) => a.status === "registered").length;
+  return { eventId: id, name, capacity, seatsLeft: Math.max(capacity - registered, 0) };
 }
 
 export const app = defineApp(manifest, {
   actions: {
-    register: async ({ email, firstName, lastName }, ctx) => {
-      const attendees = await loadAttendees(ctx.state);
+    createEvent: async ({ name, capacity }, ctx) => {
+      const event: Event = { id: crypto.randomUUID().slice(0, 8), name, capacity, attendees: [] };
+      await saveEvent(ctx.state, event);
+      await ctx.state.set(EVENTS, [...((await ctx.state.get<string[]>(EVENTS)) ?? []), event.id]);
+      return { eventId: event.id };
+    },
+
+    listEvents: async (_input, ctx) => {
+      const ids = (await ctx.state.get<string[]>(EVENTS)) ?? [];
+      const events = await Promise.all(ids.map((id) => loadEvent(ctx.state, id)));
+      return { events: events.map(summary) };
+    },
+
+    eventInfo: async ({ eventId }, ctx) => summary(await loadEvent(ctx.state, eventId)),
+
+    register: async ({ eventId, email, firstName, lastName }, ctx) => {
+      const event = await loadEvent(ctx.state, eventId);
       const key = normalize(email);
-      const existing = attendees.find((a) => a.email === key);
-      if (existing) return placement(attendees, existing);
+      const existing = event.attendees.find((a) => a.email === key);
+      if (existing) return placement(event.attendees, existing);
 
       const person = {
         email: key,
@@ -44,39 +74,32 @@ export const app = defineApp(manifest, {
         await ctx.log.warn("CRM sync failed", { email: key, error: error instanceof Error ? error.message : String(error) });
       }
 
-      const registered = attendees.filter((a) => a.status === "registered").length;
       const attendee: Attendee = {
         ...person,
-        status: registered < ctx.config.capacity ? "registered" : "waitlisted",
+        status: summary(event).seatsLeft > 0 ? "registered" : "waitlisted",
         checkedIn: false,
         crmContactId,
       };
-      const updated = [...attendees, attendee];
-      await ctx.state.set(ATTENDEES, updated);
-      await ctx.log.info(`${attendee.status} for ${ctx.config.eventName}`, { email: key });
-      return placement(updated, attendee);
+      const attendees = [...event.attendees, attendee];
+      await saveEvent(ctx.state, { ...event, attendees });
+      await ctx.log.info(`${attendee.status} for ${event.name}`, { email: key });
+      return placement(attendees, attendee);
     },
 
-    checkIn: async ({ email }, ctx) => {
-      const attendees = await loadAttendees(ctx.state);
+    checkIn: async ({ eventId, email }, ctx) => {
+      const event = await loadEvent(ctx.state, eventId);
       const key = normalize(email);
-      if (attendees.find((a) => a.email === key)?.status !== "registered") return { checkedIn: false };
+      if (event.attendees.find((a) => a.email === key)?.status !== "registered") return { checkedIn: false };
 
-      await ctx.state.set(
-        ATTENDEES,
-        attendees.map((a) => (a.email === key ? { ...a, checkedIn: true } : a)),
-      );
+      await saveEvent(ctx.state, {
+        ...event,
+        attendees: event.attendees.map((a) => (a.email === key ? { ...a, checkedIn: true } : a)),
+      });
       return { checkedIn: true };
     },
 
-    eventInfo: async (_input, ctx) => {
-      const registered = (await loadAttendees(ctx.state)).filter((a) => a.status === "registered").length;
-      const { eventName, capacity } = ctx.config;
-      return { eventName, capacity, seatsLeft: Math.max(capacity - registered, 0) };
-    },
-
-    listAttendees: async (_input, ctx) => {
-      const attendees = await loadAttendees(ctx.state);
+    listAttendees: async ({ eventId }, ctx) => {
+      const { attendees } = await loadEvent(ctx.state, eventId);
       const view = ({ status: _status, ...rest }: Attendee) => rest;
       return {
         registered: attendees.filter((a) => a.status === "registered").map(view),
