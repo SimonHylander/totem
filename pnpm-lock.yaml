@@ -34,6 +34,12 @@ importers:
         specifier: workspace:*
         version: link:../../sdk/javascript-sdk
     devDependencies:
+      '@totem/example-hubspot':
+        specifier: workspace:*
+        version: link:../hubspot
+      '@totem/platform':
+        specifier: workspace:*
+        version: link:../../platform
       '@types/node':
         specifier: ^26.6.3
         version: 26.6.3

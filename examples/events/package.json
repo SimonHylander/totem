@@ -7,12 +7,15 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "dev": "node --watch dist/server.js"
+    "dev": "node --watch dist/server.js",
+    "live": "node --env-file-if-exists=../hubspot/.env.local dist/live.js"
   },
   "dependencies": {
     "@totem/sdk": "workspace:*"
   },
   "devDependencies": {
+    "@totem/example-hubspot": "workspace:*",
+    "@totem/platform": "workspace:*",
     "@types/node": "^26.6.3",
     "typescript": "^5.9.3",
     "vitest": "^5.0.2"
