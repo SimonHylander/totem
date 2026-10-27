@@ -287,6 +287,13 @@ const tokenRequest = Effect.fnUntraced(function* (binding: OAuthBinding, params:
     client.execute,
     Effect.timeout(TOKEN_TIMEOUT),
     Effect.provideService(FetchHttpClient.RequestInit, { redirect: "error" }),
+    // HttpClient's own span would record the URL and send a traceparent to a third party. This span
+    // records only the host (ADR 0016).
+    Effect.provideService(HttpClient.TracerDisabledWhen, () => true),
+    Effect.withSpan("oauth token", {
+      kind: "client",
+      attributes: { "server.address": new URL(binding.pinned.tokenUrl).host, "oauth.grant_type": params["grant_type"] },
+    }),
     Effect.mapError(() => new ProviderFailed({ message: "the token endpoint is unreachable" })),
   );
   if (response.status === 400) {

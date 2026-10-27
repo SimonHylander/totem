@@ -1,5 +1,5 @@
 import { createHandler, type App, type Manifest } from "@totem/sdk";
-import { Effect, Layer, type Duration } from "effect";
+import { Effect, Layer, ManagedRuntime, Tracer, type Duration } from "effect";
 import { TestClock } from "effect/testing";
 import { createPlatform } from "./http.js";
 
@@ -22,12 +22,37 @@ export const principals = [
 
 type External = (request: Request) => Promise<Response> | null;
 
+/** A tracer that keeps every span it starts, for the platform and the apps to share. */
+export function spanRecorder() {
+  const spans: Tracer.Span[] = [];
+  const tracer = Tracer.make({
+    span: (options) => {
+      const span = new Tracer.NativeSpan(options);
+      spans.push(span);
+      return span;
+    },
+  });
+  const named = (name: string) => {
+    const span = spans.find((s) => s.name === name);
+    if (!span) throw new Error(`no span ${name} in ${spans.map((s) => s.name).join(", ")}`);
+    return span;
+  };
+  return { tracer, spans, named };
+}
+
 /**
  * Requests to PLATFORM reach the platform and requests to an app URL reach that app, which only
  * exists once registration has issued its secret. Anything else goes to `external`, such as a fake
- * provider. `app` is served at APP. `register(other)` serves more apps at their own URLs.
+ * provider. `app` is served at APP. `register(other)` serves more apps at their own URLs. A `tracer`
+ * records the spans of the platform and every app.
  */
-export function testPlatform<M extends Manifest>(app: App<M>, external: External = () => null) {
+export function testPlatform<M extends Manifest>(
+  app: App<M>,
+  external: External = () => null,
+  { tracer }: { tracer?: Tracer.Tracer } = {},
+) {
+  const traced = tracer ? Layer.succeed(Tracer.Tracer, tracer) : Layer.empty;
+  const observability = tracer ? { runtime: ManagedRuntime.make(traced) } : {};
   const apps = new Map<string, (request: Request) => Promise<Response>>();
   /** HMAC secrets by app ID, as registration returned them. */
   const secrets = new Map<string, string>();
@@ -40,7 +65,7 @@ export function testPlatform<M extends Manifest>(app: App<M>, external: External
     if (!response) throw new Error(`unreachable: ${request.url}`);
     return response;
   };
-  const platform = createPlatform({ baseUrl: PLATFORM, principals: [...principals], fetch: network }, testClock);
+  const platform = createPlatform({ baseUrl: PLATFORM, principals: [...principals], fetch: network }, Layer.merge(testClock, traced));
   /** Move the platform's clock forward. */
   const advance = (duration: Duration.Input) => platform.runtime.runPromise(TestClock.adjust(duration));
 
@@ -59,7 +84,7 @@ export function testPlatform<M extends Manifest>(app: App<M>, external: External
   const register = async <N extends Manifest>(other?: App<N>) => {
     const url = other ? `http://app${apps.size + 1}.test/` : APP;
     const { body } = await api("op", "POST", "/api/apps", { url });
-    const options = { secret: body["secret"] as string, fetch: network };
+    const options = { secret: body["secret"] as string, fetch: network, observability };
     apps.set(url, other ? createHandler(other, options) : createHandler(app, options));
     secrets.set(body["appId"] as string, options.secret);
     return body["appId"] as string;

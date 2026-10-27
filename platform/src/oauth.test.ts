@@ -51,6 +51,8 @@ function fakeProvider({ expiresIn = 1800 } = {}) {
   const accessTokens = new Set<string>();
   const refreshTokens = new Set<string>();
   const tokenRequests: Record<string, string>[] = [];
+  /** The traceparent header of each token request. */
+  const traceHeaders: (string | null)[] = [];
   let issued = 0;
   let hold: Promise<void> | null = null;
 
@@ -66,6 +68,7 @@ function fakeProvider({ expiresIn = 1800 } = {}) {
     if (request.url === "https://crm.test/oauth/token") {
       const form = Object.fromEntries(new URLSearchParams(await request.text()));
       tokenRequests.push(form);
+      traceHeaders.push(request.headers.get("traceparent"));
       if (form["grant_type"] === "authorization_code") {
         if (!codes.delete(form["code"]!)) return Response.json({ error: "invalid_grant" }, { status: 400 });
         return issue();
@@ -84,6 +87,7 @@ function fakeProvider({ expiresIn = 1800 } = {}) {
 
   return {
     tokenRequests,
+    traceHeaders,
     /** The provider's consent screen: the user approves and the provider issues a code for the redirect. */
     consent(authorizeUrl: string) {
       const params = new URL(authorizeUrl).searchParams;
@@ -170,6 +174,12 @@ describe("OAuth connect", () => {
     ]);
 
     expect(await whoami()).toEqual({ status: 200, body: { output: { account: "acme-crm" } } });
+  });
+
+  it("sends no trace context to the provider", async () => {
+    const { provider, connect } = await setup();
+    expect((await connect()).status).toBe(200);
+    expect(provider.traceHeaders).toEqual([null]);
   });
 
   it("refuses a callback from a browser that did not start the connect", async () => {

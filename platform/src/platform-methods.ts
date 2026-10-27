@@ -3,6 +3,7 @@ import {
   RpcError,
   SIGNATURE_HEADER,
   isJsonRpcRequest,
+  parseTrace,
   verify,
   type JsonRpcId,
   type JsonRpcRequest,
@@ -10,7 +11,7 @@ import {
   type PlatformMethods,
   type SignedPlatformMethods,
 } from "@totem/protocol";
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Tracer } from "effect";
 import type { HttpClient } from "effect/http";
 import { bearerToken } from "./access.js";
 import { forwardPortCall, manifestOf, runAction } from "./apps.js";
@@ -50,9 +51,10 @@ const methods: Methods = {
     return {};
   }),
 
+  // The app's own line. It runs under the call's span and opens none (ADR 0016).
   log: (claims, { level, message, data }) =>
-    Effect.logWithLevel(LOG_LEVELS[level])(message, data ?? "").pipe(
-      Effect.annotateLogs({ installId: claims.installId, callId: claims.callId ?? "" }),
+    Effect.logWithLevel(LOG_LEVELS[level])(message, ...(data ? [data] : [])).pipe(
+      Effect.annotateLogs({ source: "app", installId: claims.installId, ...(claims.callId && { callId: claims.callId }) }),
       Effect.as({}),
     ),
 
@@ -91,7 +93,19 @@ export const handlePlatformMethod = Effect.fnUntraced(function* (request: Reques
     claims: CallbackClaims,
     params: unknown,
   ) => Effect.Effect<unknown, PlatformError, Services>;
-  return yield* run(parsed, method(claims, parsed.params));
+  const handled = method(claims, parsed.params);
+
+  // The token names the platform span that made the call, so callbacks are its children whatever the
+  // app sends. The app's own span, if it is in the same trace, becomes a link (ADR 0016).
+  const parent = claims.trace && Tracer.externalSpan(claims.trace);
+  if (parsed.method === "log") return yield* run(parsed, parent ? Effect.withParentSpan(handled, parent) : handled);
+  const sent = parseTrace(parsed.trace);
+  const links = sent && sent.traceId === claims.trace?.traceId ? [{ span: Tracer.externalSpan(sent), attributes: {} }] : [];
+  const attributes = { "totem.install_id": claims.installId, ...(claims.callId && { "totem.call_id": claims.callId }) };
+  return yield* run(
+    parsed,
+    handled.pipe(Effect.withSpan(`rpc ${parsed.method}`, { kind: "server", attributes, links, ...(parent && { parent }) })),
+  );
 });
 
 type Params = Record<string, unknown>;
@@ -163,7 +177,16 @@ const handleSigned = Effect.fnUntraced(function* (signature: string, body: strin
     install: Install,
     params: Params,
   ) => Effect.Effect<unknown, PlatformError, Services>;
-  return yield* run(parsed, method(install, params));
+
+  // The signature has verified, so the app's trace member can be the parent (ADR 0016).
+  const sent = parseTrace(parsed.trace);
+  const attributes = { "totem.install_id": install.id, "totem.app_id": install.appId };
+  return yield* run(
+    parsed,
+    method(install, params).pipe(
+      Effect.withSpan(`rpc ${parsed.method}`, { kind: "server", attributes, ...(sent && { parent: Tracer.externalSpan(sent) }) }),
+    ),
+  );
 });
 
 function isObject(value: unknown): value is Params {

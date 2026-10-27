@@ -1,5 +1,5 @@
-import { Effect, Layer, ManagedRuntime, Schema } from "effect";
-import { FetchHttpClient, type HttpClient } from "effect/http";
+import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
+import { FetchHttpClient, Headers, HttpTraceContext, type HttpClient } from "effect/http";
 import { authenticate, bearerToken, hashToken, type Principal } from "./access.js";
 import {
   PLATFORM_METHODS_PATH,
@@ -10,7 +10,7 @@ import {
   setBinding,
   setVisibility,
 } from "./apps.js";
-import { errorPage, handleBrowser } from "./browser.js";
+import { browserRoute, errorPage, handleBrowser } from "./browser.js";
 import { connectApiKey, setOAuthClient } from "./connections.js";
 import { BadRequest, type PlatformError } from "./errors.js";
 import { handlePlatformMethod } from "./platform-methods.js";
@@ -34,23 +34,25 @@ const NonEmpty = Schema.NonEmptyString;
 const PortBinding = Schema.Struct({ installId: NonEmpty, action: NonEmpty });
 const JsonObject = Schema.Record(Schema.String, Schema.Unknown);
 
-/** One management route: a path pattern, the body it accepts and the operation it runs. */
+/** One management route: a path template such as `/api/apps/:appId`, the body it accepts and the operation it runs. */
 type Route = {
   method: string;
+  path: string;
   pattern: RegExp;
   run: (principal: Principal, params: Record<string, string>, body: unknown) => Effect.Effect<unknown, PlatformError, Services>;
 };
 
 function route<S extends Schema.Decoder<unknown>>(
   method: string,
-  pattern: RegExp,
+  path: string,
   body: S,
   run: (principal: Principal, params: Record<string, string>, body: S["Type"]) => Effect.Effect<unknown, PlatformError, Services>,
 ): Route {
   const decode = Schema.decodeUnknownEffect(body);
   return {
     method,
-    pattern,
+    path,
+    pattern: new RegExp(`^${path.replace(/:(\w+)/g, "(?<$1>[^/]+)")}$`),
     run: (principal, params, raw) =>
       decode(raw).pipe(
         Effect.mapError((error) => new BadRequest({ message: error.message })),
@@ -60,25 +62,25 @@ function route<S extends Schema.Decoder<unknown>>(
 }
 
 const routes: Route[] = [
-  route("POST", /^\/api\/apps$/, Schema.Struct({ url: NonEmpty }), (principal, _, { url }) => registerApp(principal, url)),
-  route("POST", /^\/api\/apps\/(?<appId>[^/]+)\/initialize$/, Schema.Unknown, (principal, { appId }) =>
+  route("POST", "/api/apps", Schema.Struct({ url: NonEmpty }), (principal, _, { url }) => registerApp(principal, url)),
+  route("POST", "/api/apps/:appId/initialize", Schema.Unknown, (principal, { appId }) =>
     Effect.map(initializeApp(principal, appId!), (manifest) => ({ manifest })),
   ),
   route(
     "PUT",
-    /^\/api\/apps\/(?<appId>[^/]+)\/visibility$/,
+    "/api/apps/:appId/visibility",
     Schema.Struct({ visibility: Schema.Literals(["public", "internal"]) }),
     (principal, { appId }, { visibility }) => Effect.as(setVisibility(principal, appId!, visibility), {}),
   ),
   route(
     "PUT",
-    /^\/api\/apps\/(?<appId>[^/]+)\/oauth-clients\/(?<name>[^/]+)$/,
+    "/api/apps/:appId/oauth-clients/:name",
     Schema.Struct({ clientId: NonEmpty, clientSecret: NonEmpty }),
     (principal, { appId, name }, client) => setOAuthClient(principal, appId!, name!, client),
   ),
   route(
     "POST",
-    /^\/api\/tenants\/(?<tenantId>[^/]+)\/installs$/,
+    "/api/tenants/:tenantId/installs",
     Schema.Struct({
       appId: NonEmpty,
       config: Schema.optionalKey(JsonObject),
@@ -89,19 +91,19 @@ const routes: Route[] = [
   ),
   route(
     "PUT",
-    /^\/api\/installs\/(?<installId>[^/]+)\/bindings\/(?<port>[^/]+)$/,
+    "/api/installs/:installId/bindings/:port",
     PortBinding,
     (principal, { installId, port }, binding) => Effect.as(setBinding(principal, installId!, port!, binding), {}),
   ),
   route(
     "PUT",
-    /^\/api\/installs\/(?<installId>[^/]+)\/connections\/(?<name>[^/]+)\/api-key$/,
+    "/api/installs/:installId/connections/:name/api-key",
     Schema.Struct({ key: NonEmpty }),
     (principal, { installId, name }, { key }) => Effect.as(connectApiKey(principal, installId!, name!, key), {}),
   ),
   route(
     "POST",
-    /^\/api\/installs\/(?<installId>[^/]+)\/actions\/(?<action>[^/]+)$/,
+    "/api/installs/:installId/actions/:action",
     Schema.Struct({ input: Schema.optionalKey(Schema.Unknown) }),
     (principal, { installId, action }, { input = {} }) =>
       Effect.map(invokeAction(principal, installId!, action!, input), (output) => ({ output })),
@@ -140,7 +142,16 @@ const handleApi = Effect.fnUntraced(function* (request: Request, pathname: strin
     if (!match) continue;
     const principal = yield* authenticate(bearerToken(request));
     const body = request.method === "GET" ? {} : yield* readJson(request);
-    return Response.json(yield* route.run(principal, match.groups ?? {}, body));
+    // The principal has authenticated, so the caller's W3C traceparent header can be the parent (ADR 0016).
+    const parent = HttpTraceContext.fromHeaders(Headers.fromInput(request.headers));
+    const run = route.run(principal, match.groups ?? {}, body).pipe(
+      Effect.withSpan(`${route.method} ${route.path}`, {
+        kind: "server",
+        attributes: { "http.route": route.path, "totem.principal": principal.id },
+        ...(Option.isSome(parent) && { parent: parent.value }),
+      }),
+    );
+    return Response.json(yield* run);
   }
   return Response.json({ error: `no route for ${request.method} ${pathname}` }, { status: 404 });
 });
@@ -155,6 +166,8 @@ const handleRequest = (request: Request): Effect.Effect<Response, never, Service
         ? handleApi(request, pathname).pipe(Effect.catch((error) => Effect.succeed(errorResponse(error))))
         : handleBrowser(request).pipe(
             Effect.catch((error) => Effect.succeed(errorPage(STATUS[error._tag], error.message))),
+            // Public pages, so a trace header from the browser is never continued.
+            Effect.withSpan(`${request.method} ${browserRoute(pathname)}`, { kind: "server", root: true }),
           );
   return handled.pipe(
     Effect.catchCause((cause) =>

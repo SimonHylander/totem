@@ -3,10 +3,12 @@ import {
   PROTOCOL_VERSION,
   RpcError,
   SIGNATURE_HEADER,
+  formatTrace,
   rpc,
   sign,
   type AppMethods,
   type Manifest,
+  type TraceParent,
 } from "@totem/protocol";
 import { Clock, Effect } from "effect";
 import { FetchHttpClient } from "effect/http";
@@ -65,10 +67,11 @@ export const registerApp = Effect.fnUntraced(function* (principal: Principal, ur
 export const initializeApp = Effect.fnUntraced(function* (principal: Principal, appId: string) {
   yield* authorize(principal, { type: "app.register" });
   const { apps } = yield* Store;
-  const { manifest } = yield* callApp(yield* apps.get(appId), "initialize", {
+  const platformUrl = (yield* PlatformConfig).baseUrl + PLATFORM_METHODS_PATH;
+  const { manifest } = yield* callApp(yield* apps.get(appId), "initialize", "initialize", {}, () => ({
     protocolVersion: PROTOCOL_VERSION,
-    platformUrl: (yield* PlatformConfig).baseUrl + PLATFORM_METHODS_PATH,
-  });
+    platformUrl,
+  }));
   yield* checkEndpoints(manifest);
   yield* apps.update(appId, (app) => ({ ...app, manifest }));
   return manifest;
@@ -118,10 +121,11 @@ export function newInstall(tenantId: string, appId: string, config: Record<strin
 /** Run the app's optional `install` hook for a stored install. A failing hook removes the install again. */
 export const runInstallHook = Effect.fnUntraced(function* (app: AppRecord, install: Install) {
   const store = yield* Store;
-  yield* callApp(app, "install", {
+  const now = yield* Clock.currentTimeMillis;
+  yield* callApp(app, "install", "install", attributesOf(install), (trace) => ({
     context: { tenantId: install.tenantId, installId: install.id, config: install.config },
-    callbackToken: mintCallbackToken(store.callbackKey, install.id, null, 0, yield* Clock.currentTimeMillis),
-  }).pipe(
+    callbackToken: mintCallbackToken(store.callbackKey, { installId: install.id, callId: null, depth: 0, trace }, now),
+  })).pipe(
     Effect.catchIf(
       (error) => error.code === ErrorCode.MethodNotFound,
       () => Effect.void,
@@ -184,12 +188,14 @@ export const forwardPortCall = Effect.fnUntraced(function* (claims: CallbackClai
 export const runAction = Effect.fnUntraced(function* (install: Install, action: string, input: unknown, depth: number) {
   const callId = crypto.randomUUID();
   const { apps, callbackKey } = yield* Store;
-  const { output } = yield* callApp(yield* apps.get(install.appId), "actions/invoke", {
+  const now = yield* Clock.currentTimeMillis;
+  const attributes = { ...attributesOf(install), "totem.call_id": callId, "totem.action": action, "totem.depth": depth };
+  const { output } = yield* callApp(yield* apps.get(install.appId), "actions/invoke", `invoke ${action}`, attributes, (trace) => ({
     action,
     input,
     context: { tenantId: install.tenantId, installId: install.id, config: install.config, callId },
-    callbackToken: mintCallbackToken(callbackKey, install.id, callId, depth, yield* Clock.currentTimeMillis),
-  });
+    callbackToken: mintCallbackToken(callbackKey, { installId: install.id, callId, depth, trace }, now),
+  }));
   return output;
 });
 
@@ -212,20 +218,39 @@ const checkBinding = Effect.fnUntraced(function* (install: Install, port: string
 export const manifestOf = (install: Install) =>
   Store.use(({ apps }) => Effect.map(apps.get(install.appId), (app) => app.manifest!));
 
-/** Signed JSON-RPC call to an app (ADR 0008). A JSON-RPC error fails with AppFailed, anything else dies. */
-function callApp<M extends keyof AppMethods>(app: AppRecord, method: M, params: AppMethods[M]["params"]) {
-  return Effect.gen(function* () {
-    const fetch = yield* FetchHttpClient.Fetch;
-    const timestamp = Math.floor((yield* Clock.currentTimeMillis) / 1000);
-    return yield* Effect.tryPromise({
-      try: () =>
-        rpc<AppMethods, M>(app.url, method, params, {
-          sign: async (body) => ({ [SIGNATURE_HEADER]: await sign(app.secret.reveal(), body, timestamp) }),
-          fetch,
-        }),
-      catch: (error) => error,
-    });
-  }).pipe(
+const attributesOf = (install: Install) => ({
+  "totem.tenant_id": install.tenantId,
+  "totem.install_id": install.id,
+  "totem.app_id": install.appId,
+});
+
+/**
+ * Signed JSON-RPC call to an app (ADR 0008) in a client span named `name`. The span goes to the app
+ * as the request's trace member, and `params` gets it to mint into the callback token, so the app's
+ * callbacks land under this span (ADR 0016). A JSON-RPC error fails with AppFailed, anything else dies.
+ */
+function callApp<M extends keyof AppMethods>(
+  app: AppRecord,
+  method: M,
+  name: string,
+  attributes: Record<string, unknown>,
+  params: (trace: TraceParent) => AppMethods[M]["params"],
+) {
+  return Effect.useSpan(name, { kind: "client", attributes }, (span) =>
+    Effect.gen(function* () {
+      const fetch = yield* FetchHttpClient.Fetch;
+      const timestamp = Math.floor((yield* Clock.currentTimeMillis) / 1000);
+      return yield* Effect.tryPromise({
+        try: () =>
+          rpc<AppMethods, M>(app.url, method, params(span), {
+            sign: async (body) => ({ [SIGNATURE_HEADER]: await sign(app.secret.reveal(), body, timestamp) }),
+            trace: formatTrace(span),
+            fetch,
+          }),
+        catch: (error) => error,
+      });
+    }),
+  ).pipe(
     Effect.catch((error) =>
       error instanceof RpcError
         ? Effect.fail(new AppFailed({ code: error.code, message: error.message, data: error.data }))
