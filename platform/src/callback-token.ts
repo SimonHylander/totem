@@ -16,14 +16,15 @@ export type CallbackClaims = {
 
 const TTL_SECONDS = 5 * 60;
 
-export function mintCallbackToken(key: Sealed, installId: string, callId: string | null, depth = 0): string {
-  const claims: CallbackClaims = { installId, callId, depth, exp: Math.floor(Date.now() / 1000) + TTL_SECONDS };
+/** `now` is Unix milliseconds. */
+export function mintCallbackToken(key: Sealed, installId: string, callId: string | null, depth: number, now: number): string {
+  const claims: CallbackClaims = { installId, callId, depth, exp: Math.floor(now / 1000) + TTL_SECONDS };
   const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
   return `${payload}.${mac(key, payload)}`;
 }
 
-/** Null on a bad signature, malformed token or expiry. */
-export function verifyCallbackToken(key: Sealed, token: string, now = Date.now()): CallbackClaims | null {
+/** Null on a bad signature, malformed token or expiry. `now` is Unix milliseconds. */
+export function verifyCallbackToken(key: Sealed, token: string, now: number): CallbackClaims | null {
   const [payload, signature, ...rest] = token.split(".");
   if (!payload || !signature || rest.length > 0) return null;
   const expected = Buffer.from(mac(key, payload));

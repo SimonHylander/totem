@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
-import { randomToken, type Install, type Store } from "./store.js";
+import { DateTime, Effect } from "effect";
+import { Forbidden, Unauthenticated } from "./errors.js";
+import { Store, randomToken, type Install } from "./store.js";
 
 // Platform access (ADR 0011). Only the management API uses it. Apps never see a principal.
 
@@ -26,18 +28,7 @@ export type ManagementAction =
  * redirect is a plain browser GET and the platform must know that the browser finishing a connect
  * is the one that started it (RFC 6749 section 10.12).
  */
-export type Session = { id: string; principal: Principal; expiresAt: Date };
-
-/** A management error with its HTTP status. Routes turn it into a JSON response. */
-export class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-    this.name = "HttpError";
-  }
-}
+export type Session = { id: string; principal: Principal; expiresAt: DateTime.Utc };
 
 /** The token in an `Authorization: Bearer` header, or an empty string. */
 export function bearerToken(request: Request): string {
@@ -48,10 +39,12 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-/** Resolve a management token. Null means 401. */
-export function authenticate(store: Store, token: string): Principal | null {
-  return store.apiTokens.get(hashToken(token)) ?? null;
-}
+/** Resolve a management token to its principal. */
+export const authenticate = Effect.fnUntraced(function* (token: string) {
+  const principal = (yield* Store).apiTokens.get(hashToken(token));
+  if (!principal) return yield* new Unauthenticated({ message: "missing or unknown management token" });
+  return principal;
+});
 
 /**
  * The only authorization rule. Every management function calls it before it acts. Custom roles,
@@ -73,28 +66,26 @@ export function can({ role }: Principal, action: ManagementAction): boolean {
   }
 }
 
-/** `can`, or a 403. */
-export function authorize(principal: Principal, action: ManagementAction): void {
-  if (!can(principal, action)) throw new HttpError(403, `${principal.id} may not ${action.type}`);
-}
+/** `can`, or Forbidden. */
+export const authorize = (principal: Principal, action: ManagementAction): Effect.Effect<void, Forbidden> =>
+  can(principal, action) ? Effect.void : Effect.fail(new Forbidden({ message: `${principal.id} may not ${action.type}` }));
 
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const SESSION_TTL = { hours: 12 };
 
 /** Exchange a management token for a browser session. The development login until an IdP exists. */
-export function signIn(store: Store, token: string): Session | null {
-  const principal = authenticate(store, token);
-  if (!principal) return null;
-  const session: Session = { id: randomToken(), principal, expiresAt: new Date(Date.now() + SESSION_TTL_MS) };
-  store.sessions.set(session.id, session);
+export const signIn = Effect.fnUntraced(function* (token: string) {
+  const principal = yield* authenticate(token);
+  const session: Session = { id: randomToken(), principal, expiresAt: DateTime.add(yield* DateTime.now, SESSION_TTL) };
+  (yield* Store).sessions.set(session.id, session);
   return session;
-}
+});
 
 /** The live session a cookie names, or null. */
-export function sessionFor(store: Store, id: string | undefined): Session | null {
-  const session = id ? store.sessions.get(id) : undefined;
-  if (!session || session.expiresAt.getTime() <= Date.now()) return null;
+export const sessionFor = Effect.fnUntraced(function* (id: string | undefined) {
+  const session = id ? (yield* Store).sessions.get(id) : undefined;
+  if (!session || DateTime.isLessThanOrEqualTo(session.expiresAt, yield* DateTime.now)) return null;
   return session;
-}
+});
 
 /** Forms that change state with a session cookie carry this, so other sites cannot submit them. */
 export function csrfToken(session: Session): string {

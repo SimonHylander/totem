@@ -1,6 +1,8 @@
-import { HttpError, csrfToken, sessionFor, signIn, type Session } from "./access.js";
+import { Effect } from "effect";
+import { csrfToken, sessionFor, signIn, type Session } from "./access.js";
 import { OAUTH_CALLBACK_PATH, beginOAuthConnect, finishOAuthConnect, type CallbackQuery } from "./connections.js";
-import type { Context } from "./store.js";
+import { BadRequest, Forbidden } from "./errors.js";
+import { PlatformConfig } from "./store.js";
 
 // Browser pages. OAuth consent is a browser flow, so connecting runs here with a session cookie
 // instead of on the bearer-token API (ADR 0011).
@@ -16,49 +18,53 @@ const COOKIE = "totem_session";
 const CONNECT = /^\/installs\/(?<installId>[^/]+)\/connect\/(?<name>[^/]+)$/;
 const CALLBACK = new RegExp(`^${OAUTH_CALLBACK_PATH}/(?<bindingId>[^/]+)$`);
 
-export async function handleBrowser(ctx: Context, request: Request): Promise<Response> {
+/** Serve one browser request. Failures are left to the HTTP shell, which renders them with `errorPage`. */
+export const handleBrowser = Effect.fnUntraced(function* (request: Request) {
   const url = new URL(request.url);
-  const session = sessionFor(ctx.store, cookie(request, COOKIE));
-  try {
-    // Browsers send Origin on cross-site form posts. Refusing them stops another site from signing
-    // a victim in as the attacker (login CSRF) or submitting a connect form.
-    const origin = request.headers.get("origin");
-    if (request.method === "POST" && origin !== null && origin !== new URL(ctx.baseUrl).origin) {
-      throw new HttpError(403, "cross-site form post");
-    }
+  const { baseUrl } = yield* PlatformConfig;
+  const session = yield* sessionFor(cookie(request, COOKIE));
 
-    if (url.pathname === "/signin") {
-      return request.method === "POST" ? await submitSignIn(ctx, request) : signInPage(url.searchParams.get("next") ?? "/");
-    }
+  // Browsers send Origin on cross-site form posts. Refusing them stops another site from signing
+  // a victim in as the attacker (login CSRF) or submitting a connect form.
+  const origin = request.headers.get("origin");
+  if (request.method === "POST" && origin !== null && origin !== new URL(baseUrl).origin) {
+    return yield* new Forbidden({ message: "cross-site form post" });
+  }
 
-    const connect = CONNECT.exec(url.pathname)?.groups;
-    if (connect) {
-      if (!session) return redirect(`/signin?next=${encodeURIComponent(url.pathname)}`);
-      if (request.method === "GET") return connectPage(session, connect["name"]!);
-      const form = await request.formData();
-      if (form.get("csrf") !== csrfToken(session)) throw new HttpError(403, "invalid form token");
-      return redirect(beginOAuthConnect(ctx, session, connect["installId"]!, connect["name"]!));
-    }
+  if (url.pathname === "/signin") {
+    return request.method === "POST" ? yield* submitSignIn(request) : signInPage(url.searchParams.get("next") ?? "/");
+  }
 
-    const callback = CALLBACK.exec(url.pathname)?.groups;
-    if (callback && request.method === "GET") {
-      const done = await finishOAuthConnect(ctx, session, callback["bindingId"]!, callbackQuery(url));
-      if (done.returnTo) return redirect(done.returnTo);
-      return page(200, "Connected", `<p>${escape(done.credential)} is connected for tenant ${escape(done.install.tenantId)}.</p>`);
-    }
-  } catch (error) {
-    if (error instanceof HttpError) return page(error.status, "Error", `<p>${escape(error.message)}</p>`);
-    throw error;
+  const connect = CONNECT.exec(url.pathname)?.groups;
+  if (connect) {
+    if (!session) return redirect(`/signin?next=${encodeURIComponent(url.pathname)}`);
+    if (request.method === "GET") return connectPage(session, connect["name"]!);
+    const form = yield* Effect.promise(() => request.formData());
+    if (form.get("csrf") !== csrfToken(session)) return yield* new Forbidden({ message: "invalid form token" });
+    return redirect(yield* beginOAuthConnect(session, connect["installId"]!, connect["name"]!));
+  }
+
+  const callback = CALLBACK.exec(url.pathname)?.groups;
+  if (callback && request.method === "GET") {
+    const done = yield* finishOAuthConnect(session, callback["bindingId"]!, yield* callbackQuery(url));
+    if (done.returnTo) return redirect(done.returnTo);
+    return page(200, "Connected", `<p>${escape(done.credential)} is connected for tenant ${escape(done.install.tenantId)}.</p>`);
   }
   return page(404, "Not found", "");
+});
+
+export function errorPage(status: number, message: string): Response {
+  return page(status, "Error", `<p>${escape(message)}</p>`);
 }
 
-async function submitSignIn(ctx: Context, request: Request): Promise<Response> {
-  const form = await request.formData();
-  const session = signIn(ctx.store, String(form.get("token") ?? ""));
+const submitSignIn = Effect.fnUntraced(function* (request: Request) {
+  const form = yield* Effect.promise(() => request.formData());
+  const session = yield* signIn(String(form.get("token") ?? "")).pipe(
+    Effect.catchTag("Unauthenticated", () => Effect.succeed(null)),
+  );
   if (!session) return page(401, "Sign in", "<p>Unknown token.</p>");
   const next = String(form.get("next") ?? "/");
-  const secure = new URL(ctx.baseUrl).hostname === "localhost" ? "" : "; Secure";
+  const secure = new URL((yield* PlatformConfig).baseUrl).hostname === "localhost" ? "" : "; Secure";
   return new Response(null, {
     status: 303,
     headers: {
@@ -67,7 +73,7 @@ async function submitSignIn(ctx: Context, request: Request): Promise<Response> {
       "set-cookie": `${COOKIE}=${session.id}; HttpOnly; SameSite=Lax; Path=/${secure}`,
     },
   });
-}
+});
 
 function signInPage(next: string): Response {
   return page(
@@ -93,13 +99,12 @@ function connectPage(session: Session, name: string): Response {
   );
 }
 
-function callbackQuery(url: URL): CallbackQuery {
+function callbackQuery(url: URL): Effect.Effect<CallbackQuery, BadRequest> {
   const state = url.searchParams.get("state");
   const code = url.searchParams.get("code");
   const error = url.searchParams.get("error");
-  if (!state) throw new HttpError(400, "the callback has no state");
-  if (code) return { state, code };
-  return { state, error: error ?? "no code" };
+  if (!state) return Effect.fail(new BadRequest({ message: "the callback has no state" }));
+  return Effect.succeed(code ? { state, code } : { state, error: error ?? "no code" });
 }
 
 function cookie(request: Request, name: string): string | undefined {

@@ -1,5 +1,7 @@
 import type { Endpoint, Manifest } from "@totem/protocol";
+import { Context, type DateTime, type Deferred, Layer } from "effect";
 import type { Principal, Session } from "./access.js";
+import type { ProviderFailed } from "./errors.js";
 
 // In-memory platform state. Everything is lost on restart (ADR 0011).
 
@@ -75,7 +77,7 @@ export type Connection =
       /** The binding that issued these tokens. If the app's current binding differs, this reads as missing. */
       readonly binding: OAuthBinding;
       readonly accessToken: Sealed;
-      readonly expiresAt: Date;
+      readonly expiresAt: DateTime.Utc;
       /** Null if the provider issued none. The connection then ends at `expiresAt`. */
       readonly refreshToken: Sealed | null;
       /** Token response fields other than the tokens, kept as returned. HubSpot's `hub_id` will route webhooks. */
@@ -97,7 +99,7 @@ export type PendingConnect = {
   sessionId: string | null;
   /** Where the callback redirects. Null shows the platform's own "Connected" page. */
   returnTo: string | null;
-  expiresAt: Date;
+  expiresAt: DateTime.Utc;
 };
 
 /** Where a port's calls go: an action on another install of the same tenant (ADR 0013). */
@@ -116,7 +118,7 @@ export type Install = {
   state: Map<string, unknown>;
 };
 
-export type Store = {
+export type StoreData = {
   apps: Map<string, AppRecord>;
   installs: Map<string, Install>;
   /** Management tokens by SHA-256 hex. Seeded from config. */
@@ -124,21 +126,23 @@ export type Store = {
   sessions: Map<string, Session>;
   pendingConnects: Map<string, PendingConnect>;
   /** One in-flight refresh per connection record. Concurrent `credentials/get` calls await it. */
-  refreshes: WeakMap<OAuthConnection, Promise<OAuthConnection | null>>;
+  refreshes: WeakMap<OAuthConnection, Deferred.Deferred<OAuthConnection | null, ProviderFailed>>;
   /** ADR 0008 callback token signing key. Whoever holds it can read every connected credential. */
   callbackKey: Sealed;
 };
 
-export function createStore(apiTokens: Map<string, Principal>): Store {
-  return {
-    apps: new Map(),
-    installs: new Map(),
-    apiTokens,
-    sessions: new Map(),
-    pendingConnects: new Map(),
-    refreshes: new WeakMap(),
-    callbackKey: new Sealed(randomToken()),
-  };
+/** The platform's state. One per platform, seeded with the management tokens by SHA-256 hex. */
+export class Store extends Context.Service<Store, StoreData>()("@totem/platform/Store") {
+  static readonly layer = (apiTokens: Map<string, Principal>) =>
+    Layer.sync(Store, () => ({
+      apps: new Map(),
+      installs: new Map(),
+      apiTokens,
+      sessions: new Map(),
+      pendingConnects: new Map(),
+      refreshes: new WeakMap(),
+      callbackKey: new Sealed(randomToken()),
+    }));
 }
 
 /** 32 random bytes, base64url. Used for secrets, IDs that act as capabilities, and OAuth state. */
@@ -146,12 +150,13 @@ export function randomToken(): string {
   return Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
 }
 
-/** What every platform operation needs besides its arguments. */
-export type Context = {
-  store: Store;
-  /** The platform's public origin, such as `http://localhost:3000`. */
-  baseUrl: string;
-  /** Accept `http://localhost` provider endpoints. Development only. */
-  allowLocalhost: boolean;
-  fetch: typeof fetch;
-};
+/** Deployment settings every operation can read. */
+export class PlatformConfig extends Context.Service<
+  PlatformConfig,
+  {
+    /** The platform's public origin, such as `http://localhost:3000`. */
+    readonly baseUrl: string;
+    /** Accept `http://localhost` provider endpoints. Development only. */
+    readonly allowLocalhost: boolean;
+  }
+>()("@totem/platform/PlatformConfig") {}

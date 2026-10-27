@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ErrorCode } from "@totem/protocol";
 import { appClient, defineApp, type Manifest } from "@totem/sdk";
+import { Store } from "./store.js";
 import { PLATFORM, testPlatform } from "./test-network.js";
 
 const text = { type: "object", required: ["text"], properties: { text: { type: "string" } } } as const;
@@ -38,7 +39,8 @@ async function setup() {
     appClient(caller, { secret: env.secrets.get(appId)!, platformUrl: `${PLATFORM}/rpc`, fetch: env.network });
   const client = clientFor(own.appId);
   const publish = (appId: string, token = "op") => env.api(token, "PUT", `/api/apps/${appId}/visibility`, { visibility: "public" });
-  const installsOf = (appId: string) => [...env.platform.ctx.store.installs.values()].filter((i) => i.appId === appId);
+  const installsOf = (appId: string) =>
+    env.platform.runtime.runPromise(Store.useSync(({ installs }) => [...installs.values()].filter((i) => i.appId === appId)));
   return { ...env, own, shouterId, client, clientFor, publish, installsOf };
 }
 
@@ -70,7 +72,7 @@ describe("ports/bind and ports/unbind", () => {
 
     const globex = await install({ other: caller, tenant: "globex" });
     await clientFor(globex.appId).bind(globex.installId, "loud", binding);
-    expect(installsOf(shouterId).map((i) => i.tenantId)).toEqual(["acme", "globex"]);
+    expect((await installsOf(shouterId)).map((i) => i.tenantId)).toEqual(["acme", "globex"]);
   });
 
   it("unbinds a port and keeps the provider install", async () => {
@@ -81,7 +83,7 @@ describe("ports/bind and ports/unbind", () => {
     await client.unbind(own.installId, "loud");
     expect(await client.ports(own.installId)).toEqual({ loud: null });
     await expect(client.start(own.installId, "run", { text: "hi" })).rejects.toMatchObject({ code: ErrorCode.PortUnbound });
-    expect(installsOf(shouterId)).toHaveLength(1);
+    expect(await installsOf(shouterId)).toHaveLength(1);
   });
 
   it("refuses internal apps, unknown actions and undeclared ports", async () => {

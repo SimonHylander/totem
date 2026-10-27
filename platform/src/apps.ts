@@ -8,13 +8,27 @@ import {
   type AppMethods,
   type Manifest,
 } from "@totem/protocol";
-import { HttpError, authorize, type Principal } from "./access.js";
+import { Clock, Effect } from "effect";
+import { FetchHttpClient } from "effect/http";
+import { authorize, type Principal } from "./access.js";
 import { mintCallbackToken, type CallbackClaims } from "./callback-token.js";
 import {
+  ActionNotProvided,
+  AppFailed,
+  CallDepthExceeded,
+  Conflict,
+  Forbidden,
+  InvalidManifest,
+  NotDeclared,
+  NotFound,
+  PortUnbound,
+} from "./errors.js";
+import {
+  PlatformConfig,
   Sealed,
+  Store,
   randomToken,
   type AppRecord,
-  type Context,
   type Install,
   type PortBinding,
   type Visibility,
@@ -32,8 +46,8 @@ const MAX_CALL_DEPTH = 8;
  * Register an app URL and issue its HMAC secret, shown once. The operator starts the app with the
  * secret, then calls `initializeApp` to pull the manifest.
  */
-export function registerApp({ store }: Context, principal: Principal, url: string): { appId: string; secret: string } {
-  authorize(principal, { type: "app.register" });
+export const registerApp = Effect.fnUntraced(function* (principal: Principal, url: string) {
+  yield* authorize(principal, { type: "app.register" });
   const secret = randomToken();
   const app: AppRecord = {
     id: crypto.randomUUID(),
@@ -43,46 +57,47 @@ export function registerApp({ store }: Context, principal: Principal, url: strin
     visibility: "internal",
     oauthBindings: new Map(),
   };
-  store.apps.set(app.id, app);
+  (yield* Store).apps.set(app.id, app);
   return { appId: app.id, secret };
-}
+});
 
 /** Pull the manifest through `initialize` (ADR 0007). Calling it again re-pulls. */
-export async function initializeApp(ctx: Context, principal: Principal, appId: string): Promise<Manifest> {
-  authorize(principal, { type: "app.register" });
-  const app = getApp(ctx, appId);
-  const { manifest } = await callApp(ctx, app, "initialize", {
+export const initializeApp = Effect.fnUntraced(function* (principal: Principal, appId: string) {
+  yield* authorize(principal, { type: "app.register" });
+  const app = yield* getApp(appId);
+  const { manifest } = yield* callApp(app, "initialize", {
     protocolVersion: PROTOCOL_VERSION,
-    platformUrl: ctx.baseUrl + PLATFORM_METHODS_PATH,
+    platformUrl: (yield* PlatformConfig).baseUrl + PLATFORM_METHODS_PATH,
   });
-  checkEndpoints(ctx, manifest);
+  yield* checkEndpoints(manifest);
   app.manifest = manifest;
   return manifest;
-}
+});
 
 /** Make an app public or internal (ADR 0015). New apps start internal. */
-export function setVisibility(ctx: Context, principal: Principal, appId: string, visibility: Visibility): void {
-  authorize(principal, { type: "app.setVisibility" });
-  getApp(ctx, appId).visibility = visibility;
-}
+export const setVisibility = Effect.fnUntraced(function* (principal: Principal, appId: string, visibility: Visibility) {
+  yield* authorize(principal, { type: "app.setVisibility" });
+  (yield* getApp(appId)).visibility = visibility;
+});
 
 /** Install an app for a tenant, bind its ports and run its optional `install` hook. */
-export async function createInstall(
-  ctx: Context,
+export const createInstall = Effect.fnUntraced(function* (
   principal: Principal,
   tenantId: string,
   appId: string,
   config: Record<string, unknown>,
-  bindings: Record<string, PortBinding> = {},
-): Promise<Install> {
-  authorize(principal, { type: "install.create", tenantId });
-  const app = getApp(ctx, appId);
-  if (!app.manifest) throw new HttpError(409, `app ${appId} has no manifest yet. Initialize it first.`);
+  bindings: Record<string, PortBinding>,
+) {
+  yield* authorize(principal, { type: "install.create", tenantId });
+  const app = yield* getApp(appId);
+  if (!app.manifest) return yield* new Conflict({ message: `app ${appId} has no manifest yet. Initialize it first.` });
 
   const install = newInstall(tenantId, appId, config);
-  for (const [port, binding] of Object.entries(bindings)) install.bindings.set(port, checkBinding(ctx, install, port, binding));
-  return addInstall(ctx, app, install);
-}
+  for (const [port, binding] of Object.entries(bindings)) {
+    install.bindings.set(port, yield* checkBinding(install, port, binding));
+  }
+  return yield* addInstall(app, install);
+});
 
 /** An install with no bindings, connections or state, not yet stored. */
 export function newInstall(tenantId: string, appId: string, config: Record<string, unknown>): Install {
@@ -98,120 +113,141 @@ export function newInstall(tenantId: string, appId: string, config: Record<strin
 }
 
 /** Store an install and run the app's optional `install` hook. A failing hook removes it again. */
-export async function addInstall(ctx: Context, app: AppRecord, install: Install): Promise<Install> {
-  ctx.store.installs.set(install.id, install);
-  try {
-    await callApp(ctx, app, "install", {
-      context: { tenantId: install.tenantId, installId: install.id, config: install.config },
-      callbackToken: mintCallbackToken(ctx.store.callbackKey, install.id, null),
-    });
-  } catch (error) {
-    if (!(error instanceof RpcError && error.code === ErrorCode.MethodNotFound)) {
-      ctx.store.installs.delete(install.id);
-      throw error;
-    }
-  }
+export const addInstall = Effect.fnUntraced(function* (app: AppRecord, install: Install) {
+  const store = yield* Store;
+  store.installs.set(install.id, install);
+  yield* callApp(app, "install", {
+    context: { tenantId: install.tenantId, installId: install.id, config: install.config },
+    callbackToken: mintCallbackToken(store.callbackKey, install.id, null, 0, yield* Clock.currentTimeMillis),
+  }).pipe(
+    Effect.catchIf(
+      (error) => error.code === ErrorCode.MethodNotFound,
+      () => Effect.void,
+    ),
+    Effect.onError(() => Effect.sync(() => store.installs.delete(install.id))),
+  );
   return install;
-}
+});
 
 /** Set or replace one port binding on an existing install. */
-export function setBinding(ctx: Context, principal: Principal, installId: string, port: string, binding: PortBinding): void {
-  const install = getInstall(ctx, installId);
-  authorize(principal, { type: "install.bind", install });
-  install.bindings.set(port, checkBinding(ctx, install, port, binding));
-}
+export const setBinding = Effect.fnUntraced(function* (
+  principal: Principal,
+  installId: string,
+  port: string,
+  binding: PortBinding,
+) {
+  const install = yield* getInstall(installId);
+  yield* authorize(principal, { type: "install.bind", install });
+  install.bindings.set(port, yield* checkBinding(install, port, binding));
+});
 
-/** Run one action and return its output. App failures surface as `RpcError`. */
-export async function invokeAction(
-  ctx: Context,
+/** Run one action and return its output. App failures surface as AppFailed. */
+export const invokeAction = Effect.fnUntraced(function* (
   principal: Principal,
   installId: string,
   action: string,
   input: unknown,
-): Promise<unknown> {
-  const install = getInstall(ctx, installId);
-  authorize(principal, { type: "install.invoke", install });
-  return runAction(ctx, install, action, input, 0);
-}
+) {
+  const install = yield* getInstall(installId);
+  yield* authorize(principal, { type: "install.invoke", install });
+  return yield* runAction(install, action, input, 0);
+});
 
 /**
  * `actions/invoke` from an app: run the action its port is bound to, on the provider install, and
  * return the provider's output or error unchanged.
  */
-export async function forwardPortCall(ctx: Context, claims: CallbackClaims, port: string, input: unknown): Promise<unknown> {
-  const install = getInstall(ctx, claims.installId);
-  if (!(port in (manifestOf(ctx, install).needs.actions ?? {}))) {
-    throw new RpcError(ErrorCode.NotDeclared, `port "${port}" is not declared in the manifest`);
+export const forwardPortCall = Effect.fnUntraced(function* (claims: CallbackClaims, port: string, input: unknown) {
+  const store = yield* Store;
+  const install = yield* getInstall(claims.installId);
+  if (!(port in ((yield* manifestOf(install)).needs.actions ?? {}))) {
+    return yield* new NotDeclared({ message: `port "${port}" is not declared in the manifest` });
   }
   const binding = install.bindings.get(port);
-  const provider = binding && ctx.store.installs.get(binding.installId);
+  const provider = binding && store.installs.get(binding.installId);
   if (!binding || provider?.tenantId !== install.tenantId) {
-    throw new RpcError(ErrorCode.PortUnbound, `port "${port}" has no provider bound`);
+    return yield* new PortUnbound({ message: `port "${port}" has no provider bound` });
   }
   if (claims.depth >= MAX_CALL_DEPTH) {
-    throw new RpcError(ErrorCode.InvalidRequest, `port calls nested deeper than ${MAX_CALL_DEPTH}`);
+    return yield* new CallDepthExceeded({ message: `port calls nested deeper than ${MAX_CALL_DEPTH}` });
   }
-  return runAction(ctx, provider, binding.action, input, claims.depth + 1);
-}
+  return yield* runAction(provider, binding.action, input, claims.depth + 1);
+});
 
 /**
  * Invoke an action on an install's app with a fresh call ID and callback token. `depth` counts the
  * port calls that led here (ADR 0013). The app answers ActionNotFound for actions it does not provide.
  */
-export async function runAction(ctx: Context, install: Install, action: string, input: unknown, depth: number): Promise<unknown> {
+export const runAction = Effect.fnUntraced(function* (install: Install, action: string, input: unknown, depth: number) {
   const callId = crypto.randomUUID();
-  const { output } = await callApp(ctx, getApp(ctx, install.appId), "actions/invoke", {
+  const { callbackKey } = yield* Store;
+  const { output } = yield* callApp(yield* getApp(install.appId), "actions/invoke", {
     action,
     input,
     context: { tenantId: install.tenantId, installId: install.id, config: install.config, callId },
-    callbackToken: mintCallbackToken(ctx.store.callbackKey, install.id, callId, depth),
+    callbackToken: mintCallbackToken(callbackKey, install.id, callId, depth, yield* Clock.currentTimeMillis),
   });
   return output;
-}
+});
 
 /** A binding must name a declared port, an install of the same tenant, and an action that install provides. */
-function checkBinding(ctx: Context, install: Install, port: string, binding: PortBinding): PortBinding {
-  if (!(port in (manifestOf(ctx, install).needs.actions ?? {}))) {
-    throw new HttpError(422, `port ${port} is not declared in the manifest`);
+const checkBinding = Effect.fnUntraced(function* (install: Install, port: string, binding: PortBinding) {
+  if (!(port in ((yield* manifestOf(install)).needs.actions ?? {}))) {
+    return yield* new NotDeclared({ message: `port ${port} is not declared in the manifest` });
   }
-  const provider = getInstall(ctx, binding.installId);
-  if (provider.tenantId !== install.tenantId) throw new HttpError(403, `install ${binding.installId} belongs to another tenant`);
-  if (!(binding.action in (manifestOf(ctx, provider).provides.actions ?? {}))) {
-    throw new HttpError(422, `install ${binding.installId} does not provide ${binding.action}`);
+  const provider = yield* getInstall(binding.installId);
+  if (provider.tenantId !== install.tenantId) {
+    return yield* new Forbidden({ message: `install ${binding.installId} belongs to another tenant` });
+  }
+  if (!(binding.action in ((yield* manifestOf(provider)).provides.actions ?? {}))) {
+    return yield* new ActionNotProvided({ message: `install ${binding.installId} does not provide ${binding.action}` });
   }
   return { installId: binding.installId, action: binding.action };
-}
+});
 
-export function getApp({ store }: Context, appId: string): AppRecord {
-  const app = store.apps.get(appId);
-  if (!app) throw new HttpError(404, `no app ${appId}`);
+export const getApp = Effect.fnUntraced(function* (appId: string) {
+  const app = (yield* Store).apps.get(appId);
+  if (!app) return yield* new NotFound({ message: `no app ${appId}` });
   return app;
-}
+});
 
-export function getInstall({ store }: Context, installId: string): Install {
-  const install = store.installs.get(installId);
-  if (!install) throw new HttpError(404, `no install ${installId}`);
+export const getInstall = Effect.fnUntraced(function* (installId: string) {
+  const install = (yield* Store).installs.get(installId);
+  if (!install) return yield* new NotFound({ message: `no install ${installId}` });
   return install;
-}
+});
 
 /** The manifest of an installed app. Installs only exist for initialized apps. */
-export function manifestOf(ctx: Context, install: Install): Manifest {
-  return getApp(ctx, install.appId).manifest!;
-}
+export const manifestOf = (install: Install) => Effect.map(getApp(install.appId), (app) => app.manifest!);
 
-/** Signed JSON-RPC call to an app (ADR 0008). */
-function callApp<M extends keyof AppMethods>(ctx: Context, app: AppRecord, method: M, params: AppMethods[M]["params"]) {
-  return rpc<AppMethods, M>(app.url, method, params, {
-    sign: async (body) => ({ [SIGNATURE_HEADER]: await sign(app.secret.reveal(), body) }),
-    fetch: ctx.fetch,
-  });
+/** Signed JSON-RPC call to an app (ADR 0008). A JSON-RPC error fails with AppFailed, anything else dies. */
+function callApp<M extends keyof AppMethods>(app: AppRecord, method: M, params: AppMethods[M]["params"]) {
+  return Effect.gen(function* () {
+    const fetch = yield* FetchHttpClient.Fetch;
+    const timestamp = Math.floor((yield* Clock.currentTimeMillis) / 1000);
+    return yield* Effect.tryPromise({
+      try: () =>
+        rpc<AppMethods, M>(app.url, method, params, {
+          sign: async (body) => ({ [SIGNATURE_HEADER]: await sign(app.secret.reveal(), body, timestamp) }),
+          fetch,
+        }),
+      catch: (error) => error,
+    });
+  }).pipe(
+    Effect.catch((error) =>
+      error instanceof RpcError
+        ? Effect.fail(new AppFailed({ code: error.code, message: error.message, data: error.data }))
+        : Effect.die(error),
+    ),
+  );
 }
 
 /**
  * Provider endpoints receive client secrets and refresh tokens, so check the parsed URL rather
  * than trusting the schema pattern alone (ADR 0012).
  */
-function checkEndpoints({ allowLocalhost }: Context, manifest: Manifest): void {
+const checkEndpoints = Effect.fnUntraced(function* (manifest: Manifest) {
+  const { allowLocalhost } = yield* PlatformConfig;
   for (const [name, need] of Object.entries(manifest.needs.credentials ?? {})) {
     if (need.type !== "oauth2") continue;
     for (const endpoint of [need.authorizeUrl, need.tokenUrl]) {
@@ -221,7 +257,7 @@ function checkEndpoints({ allowLocalhost }: Context, manifest: Manifest): void {
         url.username === "" &&
         url.password === "" &&
         (url.protocol === "https:" || (allowLocalhost && url.protocol === "http:" && url.hostname === "localhost"));
-      if (!ok) throw new HttpError(422, `credential ${name}: endpoint ${endpoint} must be https`);
+      if (!ok) return yield* new InvalidManifest({ message: `credential ${name}: endpoint ${endpoint} must be https` });
     }
   }
-}
+});
