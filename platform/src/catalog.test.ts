@@ -40,7 +40,7 @@ async function setup() {
   const client = clientFor(own.appId);
   const publish = (appId: string, token = "op") => env.api(token, "PUT", `/api/apps/${appId}/visibility`, { visibility: "public" });
   const installsOf = (appId: string) =>
-    env.platform.runtime.runPromise(Store.useSync(({ installs }) => [...installs.values()].filter((i) => i.appId === appId)));
+    env.platform.runtime.runPromise(Store.use(({ installs }) => installs.all)).then((all) => all.filter((i) => i.appId === appId));
   return { ...env, own, shouterId, client, clientFor, publish, installsOf };
 }
 

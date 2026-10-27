@@ -20,7 +20,6 @@ import {
   Forbidden,
   InvalidManifest,
   NotDeclared,
-  NotFound,
   PortUnbound,
 } from "./errors.js";
 import {
@@ -28,6 +27,7 @@ import {
   Sealed,
   Store,
   randomToken,
+  withEntry,
   type AppRecord,
   type Install,
   type PortBinding,
@@ -57,27 +57,27 @@ export const registerApp = Effect.fnUntraced(function* (principal: Principal, ur
     visibility: "internal",
     oauthBindings: new Map(),
   };
-  (yield* Store).apps.set(app.id, app);
+  yield* (yield* Store).apps.put(app);
   return { appId: app.id, secret };
 });
 
 /** Pull the manifest through `initialize` (ADR 0007). Calling it again re-pulls. */
 export const initializeApp = Effect.fnUntraced(function* (principal: Principal, appId: string) {
   yield* authorize(principal, { type: "app.register" });
-  const app = yield* getApp(appId);
-  const { manifest } = yield* callApp(app, "initialize", {
+  const { apps } = yield* Store;
+  const { manifest } = yield* callApp(yield* apps.get(appId), "initialize", {
     protocolVersion: PROTOCOL_VERSION,
     platformUrl: (yield* PlatformConfig).baseUrl + PLATFORM_METHODS_PATH,
   });
   yield* checkEndpoints(manifest);
-  app.manifest = manifest;
+  yield* apps.update(appId, (app) => ({ ...app, manifest }));
   return manifest;
 });
 
 /** Make an app public or internal (ADR 0015). New apps start internal. */
 export const setVisibility = Effect.fnUntraced(function* (principal: Principal, appId: string, visibility: Visibility) {
   yield* authorize(principal, { type: "app.setVisibility" });
-  (yield* getApp(appId)).visibility = visibility;
+  yield* (yield* Store).apps.update(appId, (app) => ({ ...app, visibility }));
 });
 
 /** Install an app for a tenant, bind its ports and run its optional `install` hook. */
@@ -89,14 +89,17 @@ export const createInstall = Effect.fnUntraced(function* (
   bindings: Record<string, PortBinding>,
 ) {
   yield* authorize(principal, { type: "install.create", tenantId });
-  const app = yield* getApp(appId);
+  const store = yield* Store;
+  const app = yield* store.apps.get(appId);
   if (!app.manifest) return yield* new Conflict({ message: `app ${appId} has no manifest yet. Initialize it first.` });
 
-  const install = newInstall(tenantId, appId, config);
-  for (const [port, binding] of Object.entries(bindings)) {
-    install.bindings.set(port, yield* checkBinding(install, port, binding));
-  }
-  return yield* addInstall(app, install);
+  const unbound = newInstall(tenantId, appId, config);
+  const checked = new Map<string, PortBinding>();
+  for (const [port, binding] of Object.entries(bindings)) checked.set(port, yield* checkBinding(unbound, port, binding));
+  const install: Install = { ...unbound, bindings: checked };
+  yield* store.installs.put(install);
+  yield* runInstallHook(app, install);
+  return install;
 });
 
 /** An install with no bindings, connections or state, not yet stored. */
@@ -112,10 +115,9 @@ export function newInstall(tenantId: string, appId: string, config: Record<strin
   };
 }
 
-/** Store an install and run the app's optional `install` hook. A failing hook removes it again. */
-export const addInstall = Effect.fnUntraced(function* (app: AppRecord, install: Install) {
+/** Run the app's optional `install` hook for a stored install. A failing hook removes the install again. */
+export const runInstallHook = Effect.fnUntraced(function* (app: AppRecord, install: Install) {
   const store = yield* Store;
-  store.installs.set(install.id, install);
   yield* callApp(app, "install", {
     context: { tenantId: install.tenantId, installId: install.id, config: install.config },
     callbackToken: mintCallbackToken(store.callbackKey, install.id, null, 0, yield* Clock.currentTimeMillis),
@@ -124,9 +126,8 @@ export const addInstall = Effect.fnUntraced(function* (app: AppRecord, install: 
       (error) => error.code === ErrorCode.MethodNotFound,
       () => Effect.void,
     ),
-    Effect.onError(() => Effect.sync(() => store.installs.delete(install.id))),
+    Effect.onError(() => store.installs.remove(install.id)),
   );
-  return install;
 });
 
 /** Set or replace one port binding on an existing install. */
@@ -136,9 +137,11 @@ export const setBinding = Effect.fnUntraced(function* (
   port: string,
   binding: PortBinding,
 ) {
-  const install = yield* getInstall(installId);
+  const { installs } = yield* Store;
+  const install = yield* installs.get(installId);
   yield* authorize(principal, { type: "install.bind", install });
-  install.bindings.set(port, yield* checkBinding(install, port, binding));
+  const checked = yield* checkBinding(install, port, binding);
+  yield* installs.update(installId, (current) => ({ ...current, bindings: withEntry(current.bindings, port, checked) }));
 });
 
 /** Run one action and return its output. App failures surface as AppFailed. */
@@ -148,7 +151,7 @@ export const invokeAction = Effect.fnUntraced(function* (
   action: string,
   input: unknown,
 ) {
-  const install = yield* getInstall(installId);
+  const install = yield* (yield* Store).installs.get(installId);
   yield* authorize(principal, { type: "install.invoke", install });
   return yield* runAction(install, action, input, 0);
 });
@@ -158,13 +161,13 @@ export const invokeAction = Effect.fnUntraced(function* (
  * return the provider's output or error unchanged.
  */
 export const forwardPortCall = Effect.fnUntraced(function* (claims: CallbackClaims, port: string, input: unknown) {
-  const store = yield* Store;
-  const install = yield* getInstall(claims.installId);
+  const { installs } = yield* Store;
+  const install = yield* installs.get(claims.installId);
   if (!(port in ((yield* manifestOf(install)).needs.actions ?? {}))) {
     return yield* new NotDeclared({ message: `port "${port}" is not declared in the manifest` });
   }
   const binding = install.bindings.get(port);
-  const provider = binding && store.installs.get(binding.installId);
+  const provider = binding && (yield* installs.lookup(binding.installId));
   if (!binding || provider?.tenantId !== install.tenantId) {
     return yield* new PortUnbound({ message: `port "${port}" has no provider bound` });
   }
@@ -180,8 +183,8 @@ export const forwardPortCall = Effect.fnUntraced(function* (claims: CallbackClai
  */
 export const runAction = Effect.fnUntraced(function* (install: Install, action: string, input: unknown, depth: number) {
   const callId = crypto.randomUUID();
-  const { callbackKey } = yield* Store;
-  const { output } = yield* callApp(yield* getApp(install.appId), "actions/invoke", {
+  const { apps, callbackKey } = yield* Store;
+  const { output } = yield* callApp(yield* apps.get(install.appId), "actions/invoke", {
     action,
     input,
     context: { tenantId: install.tenantId, installId: install.id, config: install.config, callId },
@@ -195,7 +198,7 @@ const checkBinding = Effect.fnUntraced(function* (install: Install, port: string
   if (!(port in ((yield* manifestOf(install)).needs.actions ?? {}))) {
     return yield* new NotDeclared({ message: `port ${port} is not declared in the manifest` });
   }
-  const provider = yield* getInstall(binding.installId);
+  const provider = yield* (yield* Store).installs.get(binding.installId);
   if (provider.tenantId !== install.tenantId) {
     return yield* new Forbidden({ message: `install ${binding.installId} belongs to another tenant` });
   }
@@ -205,20 +208,9 @@ const checkBinding = Effect.fnUntraced(function* (install: Install, port: string
   return { installId: binding.installId, action: binding.action };
 });
 
-export const getApp = Effect.fnUntraced(function* (appId: string) {
-  const app = (yield* Store).apps.get(appId);
-  if (!app) return yield* new NotFound({ message: `no app ${appId}` });
-  return app;
-});
-
-export const getInstall = Effect.fnUntraced(function* (installId: string) {
-  const install = (yield* Store).installs.get(installId);
-  if (!install) return yield* new NotFound({ message: `no install ${installId}` });
-  return install;
-});
-
 /** The manifest of an installed app. Installs only exist for initialized apps. */
-export const manifestOf = (install: Install) => Effect.map(getApp(install.appId), (app) => app.manifest!);
+export const manifestOf = (install: Install) =>
+  Store.use(({ apps }) => Effect.map(apps.get(install.appId), (app) => app.manifest!));
 
 /** Signed JSON-RPC call to an app (ADR 0008). A JSON-RPC error fails with AppFailed, anything else dies. */
 function callApp<M extends keyof AppMethods>(app: AppRecord, method: M, params: AppMethods[M]["params"]) {
