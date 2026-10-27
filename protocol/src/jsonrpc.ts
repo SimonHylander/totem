@@ -1,3 +1,5 @@
+import type { TraceMetadata } from "./trace.js";
+
 export type JsonRpcId = string | number | null;
 
 export type JsonRpcRequest = {
@@ -5,6 +7,8 @@ export type JsonRpcRequest = {
   id: JsonRpcId;
   method: string;
   params?: unknown;
+  /** Unvalidated until `parseTrace` reads it (ADR 0016). */
+  trace?: unknown;
 };
 
 export type JsonRpcErrorObject = {
@@ -43,6 +47,8 @@ type RpcOptions = {
   /** Headers computed from the exact request body, such as `X-Totem-Signature`. */
   sign?: (body: string) => Promise<Record<string, string>>;
   fetch?: typeof fetch;
+  /** The span this request continues. It goes in the body, so `sign` covers it. */
+  trace?: TraceMetadata;
 };
 
 /**
@@ -53,9 +59,9 @@ export async function rpc<T extends MethodTable, M extends keyof T & string>(
   url: string,
   method: M,
   params: T[M]["params"],
-  { headers = {}, sign, fetch: doFetch = fetch }: RpcOptions = {},
+  { headers = {}, sign, fetch: doFetch = fetch, trace }: RpcOptions = {},
 ): Promise<T[M]["result"]> {
-  const request: JsonRpcRequest = { jsonrpc: "2.0", id: crypto.randomUUID(), method, params };
+  const request: JsonRpcRequest = { jsonrpc: "2.0", id: crypto.randomUUID(), method, params, ...(trace && { trace }) };
   const body = JSON.stringify(request);
   const response = await doFetch(url, {
     method: "POST",

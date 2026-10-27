@@ -11,7 +11,8 @@
     "./manifest.schema.json": "./manifest.schema.json",
     "./context.schema.json": "./context.schema.json",
     "./app-methods.schema.json": "./app-methods.schema.json",
-    "./platform-methods.schema.json": "./platform-methods.schema.json"
+    "./platform-methods.schema.json": "./platform-methods.schema.json",
+    "./trace.schema.json": "./trace.schema.json"
   },
   "scripts": {
     "build": "tsc",
