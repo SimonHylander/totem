@@ -53,6 +53,14 @@ export const handleBrowser = Effect.fnUntraced(function* (request: Request) {
   return page(404, "Not found", "");
 });
 
+/** The route a browser request matches, without its IDs, to name its span. */
+export function browserRoute(pathname: string): string {
+  if (pathname === "/signin") return "/signin";
+  if (CONNECT.test(pathname)) return "/installs/:installId/connect/:name";
+  if (CALLBACK.test(pathname)) return `${OAUTH_CALLBACK_PATH}/:bindingId`;
+  return "unmatched";
+}
+
 export function errorPage(status: number, message: string): Response {
   return page(status, "Error", `<p>${escape(message)}</p>`);
 }
