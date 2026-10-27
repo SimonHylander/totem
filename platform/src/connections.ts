@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { CredentialStatus, CredentialValue } from "@totem/protocol";
-import { DateTime, Deferred, Effect } from "effect";
-import { FetchHttpClient } from "effect/http";
+import { DateTime, Deferred, Effect, Option, Schema } from "effect";
+import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { authorize, type Principal, type Session } from "./access.js";
 import { manifestOf } from "./apps.js";
 import type { CallbackClaims } from "./callback-token.js";
@@ -136,13 +136,13 @@ export const finishOAuthConnect = Effect.fnUntraced(function* (
   const { binding } = yield* oauthBinding(install, pending.credential);
   if (binding !== pending.binding) return yield* new Conflict({ message: "the OAuth client changed during the connect" });
 
-  const response = yield* tokenRequest(binding, {
+  const body = yield* tokenRequest(binding, {
     grant_type: "authorization_code",
     code: query.code,
     redirect_uri: yield* redirectUriFor(binding.id),
   });
-  if (!response.ok) return yield* new ProviderFailed({ message: `token exchange failed with ${response.status}` });
-  yield* setConnection(install.id, pending.credential, yield* toConnection(binding, yield* json(response), null));
+  if (body === "invalid_grant") return yield* new ProviderFailed({ message: "the provider refused the code" });
+  yield* setConnection(install.id, pending.credential, yield* toConnection(binding, body, null));
   return { install, credential: pending.credential, returnTo: pending.returnTo };
 });
 
@@ -237,15 +237,11 @@ const refreshOnce = Effect.fnUntraced(function* (
   // Without a refresh token the connection ends at expiresAt.
   if (!connection.refreshToken) return (yield* DateTime.isPast(connection.expiresAt)) ? null : connection;
 
-  const response = yield* tokenRequest(binding, {
+  const body = yield* tokenRequest(binding, {
     grant_type: "refresh_token",
     refresh_token: connection.refreshToken.reveal(),
   });
-  const grantGone = response.status === 400 && (yield* errorCode(response)) === "invalid_grant";
-  if (!grantGone && !response.ok) {
-    return yield* new ProviderFailed({ message: `token refresh failed with ${response.status}` });
-  }
-  const refreshed = grantGone ? undefined : yield* toConnection(binding, yield* json(response), connection.refreshToken);
+  const refreshed = body === "invalid_grant" ? undefined : yield* toConnection(binding, body, connection.refreshToken);
 
   // The write, including the delete, applies only if no reconnect replaced the record we read.
   // A reconnect's record wins. An install deleted meanwhile has no grant left.
@@ -268,52 +264,59 @@ const oauthBinding = Effect.fnUntraced(function* (install: Install, name: string
   return { need, binding };
 });
 
-/**
- * POST to the pinned token URL with the client credentials in the form body (client_secret_post).
- * Redirects are refused, so a redirect cannot carry the secret elsewhere.
- */
-const tokenRequest = Effect.fnUntraced(function* (binding: OAuthBinding, params: Record<string, string>) {
-  const fetch = yield* FetchHttpClient.Fetch;
-  return yield* Effect.tryPromise({
-    try: () =>
-      fetch(binding.pinned.tokenUrl, {
-        method: "POST",
-        redirect: "error",
-        headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
-        body: new URLSearchParams({
-          ...params,
-          client_id: binding.clientId,
-          client_secret: binding.clientSecret.reveal(),
-        }),
-      }),
-    catch: () => new ProviderFailed({ message: "the token endpoint is unreachable" }),
-  });
+const TOKEN_TIMEOUT = "10 seconds";
+const JsonObject = Schema.Record(Schema.String, Schema.Unknown);
+const TokenError = Schema.Struct({ error: Schema.String });
+/** RFC 6749 section 5.1. The other fields of the response are kept as `providerFields`. */
+const TokenFields = Schema.Struct({
+  access_token: Schema.String,
+  expires_in: Schema.Number,
+  refresh_token: Schema.optionalKey(Schema.String),
 });
 
-const json = (response: Response) =>
-  Effect.tryPromise({
-    try: (): Promise<unknown> => response.json(),
-    catch: () => new ProviderFailed({ message: "the token response is not JSON" }),
-  });
-
-const errorCode = (response: Response) =>
-  json(response).pipe(
-    Effect.map((body) => (typeof body === "object" && body !== null && "error" in body ? body.error : undefined)),
-    Effect.orElseSucceed(() => undefined),
+/**
+ * POST to the pinned token URL with the client credentials in the form body (client_secret_post).
+ * Redirects are refused, so a redirect cannot carry the secret elsewhere. Answers the response body,
+ * or "invalid_grant" when the provider refused the grant. Every other failure is ProviderFailed.
+ */
+const tokenRequest = Effect.fnUntraced(function* (binding: OAuthBinding, params: Record<string, string>) {
+  const client = yield* HttpClient.HttpClient;
+  const response = yield* HttpClientRequest.post(binding.pinned.tokenUrl).pipe(
+    HttpClientRequest.acceptJson,
+    HttpClientRequest.bodyUrlParams({ ...params, client_id: binding.clientId, client_secret: binding.clientSecret.reveal() }),
+    client.execute,
+    Effect.timeout(TOKEN_TIMEOUT),
+    Effect.provideService(FetchHttpClient.RequestInit, { redirect: "error" }),
+    Effect.mapError(() => new ProviderFailed({ message: "the token endpoint is unreachable" })),
   );
-
-/** Parse a token response (RFC 6749 section 5.1). Keeps the old refresh token when none is returned. */
-const toConnection = Effect.fnUntraced(function* (binding: OAuthBinding, body: unknown, previousRefresh: Sealed | null) {
-  const { access_token, refresh_token, expires_in, id_token: _idToken, ...providerFields } = body as Record<string, unknown>;
-  if (typeof access_token !== "string" || typeof expires_in !== "number") {
-    return yield* new ProviderFailed({ message: "the token response has no access_token or expires_in" });
+  if (response.status === 400) {
+    const refused = yield* HttpClientResponse.schemaBodyJson(TokenError)(response).pipe(Effect.option);
+    if (Option.isSome(refused) && refused.value.error === "invalid_grant") return "invalid_grant" as const;
   }
+  if (response.status < 200 || response.status >= 300) {
+    return yield* new ProviderFailed({ message: `the token endpoint answered ${response.status}` });
+  }
+  return yield* HttpClientResponse.schemaBodyJson(JsonObject)(response).pipe(
+    Effect.mapError(() => new ProviderFailed({ message: "the token response is not a JSON object" })),
+  );
+});
+
+/** Parse a token response. Keeps the old refresh token when none is returned. */
+const toConnection = Effect.fnUntraced(function* (
+  binding: OAuthBinding,
+  body: Readonly<Record<string, unknown>>,
+  previousRefresh: Sealed | null,
+) {
+  const tokens = yield* Schema.decodeUnknownEffect(TokenFields)(body).pipe(
+    Effect.mapError(() => new ProviderFailed({ message: "the token response has no access_token or expires_in" })),
+  );
+  const { access_token: _access, refresh_token: _refresh, expires_in: _expires, id_token: _id, ...providerFields } = body;
   const connection: OAuthConnection = {
     type: "oauth2",
     binding,
-    accessToken: new Sealed(access_token),
-    expiresAt: DateTime.add(yield* DateTime.now, { seconds: expires_in }),
-    refreshToken: typeof refresh_token === "string" ? new Sealed(refresh_token) : previousRefresh,
+    accessToken: new Sealed(tokens.access_token),
+    expiresAt: DateTime.add(yield* DateTime.now, { seconds: tokens.expires_in }),
+    refreshToken: tokens.refresh_token !== undefined ? new Sealed(tokens.refresh_token) : previousRefresh,
     providerFields,
   };
   return connection;

@@ -1,5 +1,5 @@
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
-import { FetchHttpClient } from "effect/http";
+import { FetchHttpClient, type HttpClient } from "effect/http";
 import { authenticate, bearerToken, hashToken, type Principal } from "./access.js";
 import {
   PLATFORM_METHODS_PATH,
@@ -28,7 +28,7 @@ export type PlatformOptions = {
   fetch?: typeof fetch;
 };
 
-type Services = Store | PlatformConfig;
+type Services = Store | PlatformConfig | HttpClient.HttpClient;
 
 const NonEmpty = Schema.NonEmptyString;
 const PortBinding = Schema.Struct({ installId: NonEmpty, action: NonEmpty });
@@ -165,11 +165,12 @@ const handleRequest = (request: Request): Effect.Effect<Response, never, Service
   );
 };
 
-/** The services every operation runs with. `fetch` reaches apps and OAuth providers. */
+/** The services every operation runs with. `fetch` reaches apps, and OAuth providers through HttpClient. */
 export function platformLayer({ baseUrl, principals, allowLocalhost = false, fetch }: PlatformOptions) {
   return Layer.mergeAll(
     Store.layer(new Map(principals.map(({ token, principal }) => [hashToken(token), principal]))),
     Layer.succeed(PlatformConfig, { baseUrl, allowLocalhost }),
+    FetchHttpClient.layer,
     fetch ? Layer.succeed(FetchHttpClient.Fetch, fetch) : Layer.empty,
   );
 }

@@ -11,6 +11,7 @@ import {
   type SignedPlatformMethods,
 } from "@totem/protocol";
 import { Clock, Effect } from "effect";
+import type { HttpClient } from "effect/http";
 import { bearerToken } from "./access.js";
 import { forwardPortCall, manifestOf, runAction } from "./apps.js";
 import { verifyCallbackToken, type CallbackClaims } from "./callback-token.js";
@@ -23,7 +24,7 @@ import { Store, withEntry, type Install, type PlatformConfig } from "./store.js"
 // Signed methods are the exception: the app signs them with its HMAC secret and names one of its
 // installs (ADR 0014, ADR 0015).
 
-type Services = Store | PlatformConfig;
+type Services = Store | PlatformConfig | HttpClient.HttpClient;
 
 type Methods = {
   [K in keyof PlatformMethods]: (
