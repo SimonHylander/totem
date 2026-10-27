@@ -12,6 +12,7 @@ Protocol version is a single major. Breaking changes bump it. The `$id` of every
 | [`context.schema.json`](context.schema.json) | Install and call context carried in params. |
 | [`app-methods.schema.json`](app-methods.schema.json) | Methods the platform calls on an app. `$defs` per method with `params` and `result`. |
 | [`platform-methods.schema.json`](platform-methods.schema.json) | Methods an app calls on the platform. Same layout. |
+| [`trace.schema.json`](trace.schema.json) | Optional trace metadata on any request. |
 
 Manifest action and port schemas reference the draft 2020-12 meta-schema directly. Validators need format support and non-strict mode for that reference. With ajv:
 
@@ -28,6 +29,13 @@ JSON-RPC 2.0 over HTTP POST. One request per HTTP call. Batch requests are not s
 
 - Platform to app: `POST <appUrl>`, header `X-Totem-Signature: t=<unix seconds>,v1=<hex hmac-sha256>`. The MAC is over `<t>.<raw body>` with the app's registration secret. Reject if `t` is more than 300 seconds from now.
 - App to platform: `POST <platformUrl>`, header `Authorization: Bearer <callbackToken>`. The signed methods are the exception: `actions/start`, `apps/list` and the `ports/*` methods name one of the app's installs and carry `X-Totem-Signature` with its registration secret instead ([0014](../docs/decisions/0014-apps-start-their-own-actions.md), [0015](../docs/decisions/0015-apps-manage-their-ports.md)).
+
+Any request may carry a `trace` member beside `params`, defined by [`trace.schema.json`](trace.schema.json). It holds a W3C `traceparent` naming the span the request continues. It is part of the signed body. A receiver ignores a missing or invalid `trace` and never rejects a request because of it ([0016](../docs/decisions/0016-trace-metadata.md)).
+
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "credentials/get", "params": { "name": "crm" },
+  "trace": { "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01" } }
+```
 
 Responses are HTTP 200 with a JSON-RPC envelope, including JSON-RPC errors. A failed signature or token check is HTTP 401 with an `Unauthorized` error envelope.
 
