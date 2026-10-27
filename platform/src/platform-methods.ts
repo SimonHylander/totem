@@ -12,12 +12,12 @@ import {
 } from "@totem/protocol";
 import { Clock, Effect } from "effect";
 import { bearerToken } from "./access.js";
-import { forwardPortCall, getInstall, manifestOf, runAction } from "./apps.js";
+import { forwardPortCall, manifestOf, runAction } from "./apps.js";
 import { verifyCallbackToken, type CallbackClaims } from "./callback-token.js";
 import { bindPort, connectPort, listApps, listPorts, unbindPort } from "./catalog.js";
 import { getCredential } from "./connections.js";
 import { BadRequest, NotDeclared, type PlatformError } from "./errors.js";
-import { Store, type Install, type PlatformConfig } from "./store.js";
+import { Store, withEntry, type Install, type PlatformConfig } from "./store.js";
 
 // The endpoint apps call (ADR 0008). The callback token names the install, so params carry no tenant.
 // Signed methods are the exception: the app signs them with its HMAC secret and names one of its
@@ -37,14 +37,17 @@ const LOG_LEVELS = { debug: "Debug", info: "Info", warn: "Warn", error: "Error" 
 const methods: Methods = {
   "credentials/get": (claims, { name }) => getCredential(claims, name),
 
-  "state/get": (claims, { key }) => Effect.map(stateOf(claims), (state) => ({ value: state.get(key) ?? null })),
+  "state/get": (claims, { key }) =>
+    Effect.map(statefulInstall(claims), (install) => ({ value: install.state.get(key) ?? null })),
 
-  "state/set": (claims, { key, value }) =>
-    Effect.map(stateOf(claims), (state) => {
-      if (value === null) state.delete(key);
-      else state.set(key, value);
-      return {};
-    }),
+  "state/set": Effect.fnUntraced(function* (claims, { key, value }) {
+    yield* statefulInstall(claims);
+    yield* (yield* Store).installs.update(claims.installId, (install) => ({
+      ...install,
+      state: withEntry(install.state, key, value === null ? undefined : value),
+    }));
+    return {};
+  }),
 
   log: (claims, { level, message, data }) =>
     Effect.logWithLevel(LOG_LEVELS[level])(message, data ?? "").pipe(
@@ -56,12 +59,13 @@ const methods: Methods = {
     Effect.map(forwardPortCall(claims, port, input), (output) => ({ output })),
 };
 
-const stateOf = Effect.fnUntraced(function* (claims: CallbackClaims) {
-  const install = yield* getInstall(claims.installId);
+/** The calling install, if its manifest declares state. */
+const statefulInstall = Effect.fnUntraced(function* (claims: CallbackClaims) {
+  const install = yield* (yield* Store).installs.get(claims.installId);
   if ((yield* manifestOf(install)).needs.state !== true) {
     return yield* new NotDeclared({ message: "state is not declared in the manifest" });
   }
-  return install.state;
+  return install;
 });
 
 const isMethod = (name: string): name is keyof PlatformMethods => name in methods;
@@ -74,7 +78,7 @@ export const handlePlatformMethod = Effect.fnUntraced(function* (request: Reques
 
   const store = yield* Store;
   const claims = verifyCallbackToken(store.callbackKey, bearerToken(request), yield* Clock.currentTimeMillis);
-  if (!claims || !store.installs.has(claims.installId)) {
+  if (!claims || !(yield* store.installs.lookup(claims.installId))) {
     return reply(null, new RpcError(ErrorCode.Unauthorized, "bad or expired callback token"), 401);
   }
   const parsed = parse(body);
@@ -148,8 +152,8 @@ const handleSigned = Effect.fnUntraced(function* (signature: string, body: strin
   }
 
   const store = yield* Store;
-  const install = store.installs.get(installId);
-  const app = install && store.apps.get(install.appId);
+  const install = yield* store.installs.lookup(installId);
+  const app = install && (yield* store.apps.lookup(install.appId));
   const now = Math.floor((yield* Clock.currentTimeMillis) / 1000);
   if (!install || !app || !(yield* Effect.promise(() => verify(app.secret.reveal(), signature, body, { now })))) {
     return reply(parsed.id, new RpcError(ErrorCode.Unauthorized, "bad signature"), 401);

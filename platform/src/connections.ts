@@ -3,7 +3,7 @@ import type { CredentialStatus, CredentialValue } from "@totem/protocol";
 import { DateTime, Deferred, Effect } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { authorize, type Principal, type Session } from "./access.js";
-import { getApp, getInstall, manifestOf } from "./apps.js";
+import { manifestOf } from "./apps.js";
 import type { CallbackClaims } from "./callback-token.js";
 import { BadRequest, Conflict, CredentialMissing, Forbidden, NotDeclared, NotFound, ProviderFailed } from "./errors.js";
 import {
@@ -11,6 +11,8 @@ import {
   Sealed,
   Store,
   randomToken,
+  withEntry,
+  type Connection,
   type Install,
   type OAuthBinding,
   type OAuthConnection,
@@ -41,7 +43,8 @@ export const setOAuthClient = Effect.fnUntraced(function* (
   client: { clientId: string; clientSecret: string },
 ) {
   yield* authorize(principal, { type: "app.setOAuthClient" });
-  const app = yield* getApp(appId);
+  const { apps } = yield* Store;
+  const app = yield* apps.get(appId);
   const need = app.manifest?.needs.credentials?.[name];
   if (need?.type !== "oauth2") return yield* new NotFound({ message: `no oauth2 credential ${name}` });
 
@@ -50,12 +53,13 @@ export const setOAuthClient = Effect.fnUntraced(function* (
   const current = app.oauthBindings.get(name);
   if (current?.id === id && current.clientId === client.clientId) current.clientSecret = new Sealed(client.clientSecret);
   else {
-    app.oauthBindings.set(name, {
+    const binding: OAuthBinding = {
       id,
       clientId: client.clientId,
       clientSecret: new Sealed(client.clientSecret),
       pinned: { authorizeUrl, tokenUrl },
-    });
+    };
+    yield* apps.update(appId, (app) => ({ ...app, oauthBindings: withEntry(app.oauthBindings, name, binding) }));
   }
   return { redirectUri: yield* redirectUriFor(id), authorizeUrl, tokenUrl, scopes };
 });
@@ -65,7 +69,7 @@ export const setOAuthClient = Effect.fnUntraced(function* (
  * current connection, if any, keeps working until the new one is stored.
  */
 export const beginOAuthConnect = Effect.fnUntraced(function* (session: Session, installId: string, name: string) {
-  const install = yield* getInstall(installId);
+  const install = yield* (yield* Store).installs.get(installId);
   yield* authorize(session.principal, { type: "install.connect", install });
   return yield* startOAuthConnect(install, name, { sessionId: session.id, returnTo: null });
 });
@@ -82,7 +86,8 @@ export const startOAuthConnect = Effect.fnUntraced(function* (
   const { need, binding } = yield* oauthBinding(install, name);
 
   const state = randomToken();
-  (yield* Store).pendingConnects.set(state, {
+  yield* (yield* Store).pendingConnects.put({
+    state,
     installId: install.id,
     credential: name,
     binding,
@@ -114,8 +119,7 @@ export const finishOAuthConnect = Effect.fnUntraced(function* (
   query: CallbackQuery,
 ) {
   const store = yield* Store;
-  const pending = store.pendingConnects.get(query.state);
-  store.pendingConnects.delete(query.state);
+  const pending = yield* store.pendingConnects.take(query.state);
   if (!pending || DateTime.isLessThanOrEqualTo(pending.expiresAt, yield* DateTime.now)) {
     return yield* new BadRequest({ message: "unknown or expired connect" });
   }
@@ -127,7 +131,7 @@ export const finishOAuthConnect = Effect.fnUntraced(function* (
   }
   if ("error" in query) return yield* new BadRequest({ message: `the provider returned ${query.error}` });
 
-  const install = yield* getInstall(pending.installId);
+  const install = yield* store.installs.get(pending.installId);
   if (session && pending.sessionId !== null) yield* authorize(session.principal, { type: "install.connect", install });
   const { binding } = yield* oauthBinding(install, pending.credential);
   if (binding !== pending.binding) return yield* new Conflict({ message: "the OAuth client changed during the connect" });
@@ -138,13 +142,13 @@ export const finishOAuthConnect = Effect.fnUntraced(function* (
     redirect_uri: yield* redirectUriFor(binding.id),
   });
   if (!response.ok) return yield* new ProviderFailed({ message: `token exchange failed with ${response.status}` });
-  install.connections.set(pending.credential, yield* toConnection(binding, yield* json(response), null));
+  yield* setConnection(install.id, pending.credential, yield* toConnection(binding, yield* json(response), null));
   return { install, credential: pending.credential, returnTo: pending.returnTo };
 });
 
 /** Each of an install's `needs.credentials`, and whether `credentials/get` would find it connected now. */
 export const credentialStatus = Effect.fnUntraced(function* (install: Install) {
-  const { oauthBindings } = yield* getApp(install.appId);
+  const { oauthBindings } = yield* (yield* Store).apps.get(install.appId);
   const status: Record<string, CredentialStatus> = {};
   for (const [name, need] of Object.entries((yield* manifestOf(install)).needs.credentials ?? {})) {
     const connection = install.connections.get(name);
@@ -162,20 +166,26 @@ export const connectApiKey = Effect.fnUntraced(function* (
   name: string,
   key: string,
 ) {
-  const install = yield* getInstall(installId);
+  const install = yield* (yield* Store).installs.get(installId);
   yield* authorize(principal, { type: "install.connect", install });
   if ((yield* manifestOf(install)).needs.credentials?.[name]?.type !== "apiKey") {
     return yield* new NotFound({ message: `no apiKey credential ${name}` });
   }
-  install.connections.set(name, { type: "apiKey", key: new Sealed(key) });
+  yield* setConnection(installId, name, { type: "apiKey", key: new Sealed(key) });
 });
+
+const setConnection = (installId: string, name: string, connection: Connection) =>
+  Store.use(({ installs }) =>
+    installs.update(installId, (install) => ({ ...install, connections: withEntry(install.connections, name, connection) })),
+  );
 
 /**
  * `credentials/get`. The callback token picks the install. An oauth2 result stays valid for at
  * least REFRESH_MARGIN, because the platform refreshes first when less remains.
  */
 export const getCredential = Effect.fnUntraced(function* (claims: CallbackClaims, name: string) {
-  const install = yield* getInstall(claims.installId);
+  const { apps, installs } = yield* Store;
+  const install = yield* installs.get(claims.installId);
   const need = (yield* manifestOf(install)).needs.credentials?.[name];
   if (!need) return yield* new NotDeclared({ message: `credential "${name}" is not declared in the manifest` });
 
@@ -186,7 +196,7 @@ export const getCredential = Effect.fnUntraced(function* (claims: CallbackClaims
   }
   if (connection?.type !== "oauth2" || need.type !== "oauth2") return yield* missing;
 
-  const binding = (yield* getApp(install.appId)).oauthBindings.get(name);
+  const binding = (yield* apps.get(install.appId)).oauthBindings.get(name);
   if (connection.binding !== binding) return yield* missing;
 
   const stale = DateTime.isLessThanOrEqualTo(connection.expiresAt, DateTime.add(yield* DateTime.now, REFRESH_MARGIN));
@@ -231,27 +241,26 @@ const refreshOnce = Effect.fnUntraced(function* (
     grant_type: "refresh_token",
     refresh_token: connection.refreshToken.reveal(),
   });
-  // Every write, including the delete, applies only if no reconnect replaced the record we read.
-  const current = install.connections.get(name);
-  const replaced = current !== connection;
-  const currentOrNull = current?.type === "oauth2" ? current : null;
-  if (response.status === 400 && (yield* errorCode(response)) === "invalid_grant") {
-    if (replaced) return currentOrNull;
-    install.connections.delete(name);
-    return null;
+  const grantGone = response.status === 400 && (yield* errorCode(response)) === "invalid_grant";
+  if (!grantGone && !response.ok) {
+    return yield* new ProviderFailed({ message: `token refresh failed with ${response.status}` });
   }
-  if (!response.ok) return yield* new ProviderFailed({ message: `token refresh failed with ${response.status}` });
-  const refreshed = yield* toConnection(binding, yield* json(response), connection.refreshToken);
-  if (replaced) return currentOrNull;
-  install.connections.set(name, refreshed);
-  return refreshed;
+  const refreshed = grantGone ? undefined : yield* toConnection(binding, yield* json(response), connection.refreshToken);
+
+  // The write, including the delete, applies only if no reconnect replaced the record we read.
+  // A reconnect's record wins. An install deleted meanwhile has no grant left.
+  return yield* (yield* Store).installs.modify(install.id, (current) => {
+    const stored = current.connections.get(name);
+    if (stored !== connection) return [stored?.type === "oauth2" ? stored : null, current];
+    return [refreshed ?? null, { ...current, connections: withEntry(current.connections, name, refreshed) }];
+  }).pipe(Effect.catchTag("NotFound", () => Effect.succeed(null)));
 });
 
 /** The current binding for an oauth2 credential, checked against the manifest's endpoints. */
 const oauthBinding = Effect.fnUntraced(function* (install: Install, name: string) {
   const need = (yield* manifestOf(install)).needs.credentials?.[name];
   if (need?.type !== "oauth2") return yield* new NotFound({ message: `no oauth2 credential ${name}` });
-  const binding = (yield* getApp(install.appId)).oauthBindings.get(name);
+  const binding = (yield* (yield* Store).apps.get(install.appId)).oauthBindings.get(name);
   if (!binding) return yield* new Conflict({ message: `no OAuth client set for ${name}. An operator must set one.` });
   if (binding.pinned.authorizeUrl !== need.authorizeUrl || binding.pinned.tokenUrl !== need.tokenUrl) {
     return yield* new Conflict({ message: `the endpoints for ${name} changed. An operator must set the OAuth client again.` });

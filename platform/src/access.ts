@@ -76,13 +76,13 @@ const SESSION_TTL = { hours: 12 };
 export const signIn = Effect.fnUntraced(function* (token: string) {
   const principal = yield* authenticate(token);
   const session: Session = { id: randomToken(), principal, expiresAt: DateTime.add(yield* DateTime.now, SESSION_TTL) };
-  (yield* Store).sessions.set(session.id, session);
+  yield* (yield* Store).sessions.put(session);
   return session;
 });
 
 /** The live session a cookie names, or null. */
 export const sessionFor = Effect.fnUntraced(function* (id: string | undefined) {
-  const session = id ? (yield* Store).sessions.get(id) : undefined;
+  const session = id ? yield* (yield* Store).sessions.lookup(id) : undefined;
   if (!session || DateTime.isLessThanOrEqualTo(session.expiresAt, yield* DateTime.now)) return null;
   return session;
 });

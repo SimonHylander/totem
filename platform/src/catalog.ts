@@ -1,9 +1,9 @@
 import type { BoundPort, CatalogApp } from "@totem/protocol";
 import { Effect } from "effect";
-import { addInstall, getApp, manifestOf, newInstall } from "./apps.js";
+import { manifestOf, newInstall, runInstallHook } from "./apps.js";
 import { credentialStatus, startOAuthConnect } from "./connections.js";
 import { ActionNotProvided, BadRequest, NotDeclared, PortUnbound } from "./errors.js";
-import { Store, type Install } from "./store.js";
+import { Store, withEntry, type Install } from "./store.js";
 
 // The catalog and port methods an app signs with its HMAC secret (ADR 0015). They let an app's own
 // UI show which public apps exist and bind, unbind and connect its ports. The calling install is
@@ -11,8 +11,9 @@ import { Store, type Install } from "./store.js";
 
 /** `apps/list`: every initialized public app other than the caller. */
 export const listApps = (caller: Install) =>
-  Store.useSync(({ apps }) =>
-    [...apps.values()].flatMap((app): CatalogApp[] =>
+  Store.use(({ apps }) =>
+    Effect.map(apps.all, (all) =>
+      all.flatMap((app): CatalogApp[] =>
       app.visibility === "public" && app.manifest && app.id !== caller.appId
         ? [
             {
@@ -23,6 +24,7 @@ export const listApps = (caller: Install) =>
             },
           ]
         : [],
+      ),
     ),
   );
 
@@ -49,22 +51,29 @@ export const listPorts = Effect.fnUntraced(function* (caller: Install) {
  */
 export const bindPort = Effect.fnUntraced(function* (caller: Install, port: string, appId: string, action: string) {
   yield* declared(caller, port);
-  const store = yield* Store;
-  const app = store.apps.get(appId);
+  const { apps, installs } = yield* Store;
+  const app = yield* apps.lookup(appId);
   if (app?.visibility !== "public" || !app.manifest) return yield* new BadRequest({ message: `no public app ${appId}` });
   if (!(action in (app.manifest.provides.actions ?? {}))) {
     return yield* new ActionNotProvided({ message: `${app.manifest.name} does not provide ${action}` });
   }
-  const provider =
-    [...store.installs.values()].find((i) => i.tenantId === caller.tenantId && i.appId === appId) ??
-    (yield* addInstall(app, newInstall(caller.tenantId, appId, {})));
-  caller.bindings.set(port, { installId: provider.id, action });
+  // Atomic, so concurrent binds of one tenant share a single provider install.
+  const { value: provider, created } = yield* installs.findOrPut(
+    (install) => install.tenantId === caller.tenantId && install.appId === appId,
+    () => newInstall(caller.tenantId, appId, {}),
+  );
+  if (created) yield* runInstallHook(app, provider);
+  const binding = { installId: provider.id, action };
+  yield* installs.update(caller.id, (install) => ({ ...install, bindings: withEntry(install.bindings, port, binding) }));
 });
 
 /** `ports/unbind`: remove a port's binding. The provider install stays, since other ports may use it. */
 export const unbindPort = Effect.fnUntraced(function* (caller: Install, port: string) {
   yield* declared(caller, port);
-  caller.bindings.delete(port);
+  yield* (yield* Store).installs.update(caller.id, (install) => ({
+    ...install,
+    bindings: withEntry(install.bindings, port, undefined),
+  }));
 });
 
 /**
@@ -75,7 +84,7 @@ export const connectPort = Effect.fnUntraced(function* (caller: Install, port: s
   yield* declared(caller, port);
   const provider = yield* boundProvider(caller, port);
   if (!provider) return yield* new PortUnbound({ message: `port "${port}" has no provider bound` });
-  if (URL.parse(returnTo)?.origin !== new URL((yield* getApp(caller.appId)).url).origin) {
+  if (URL.parse(returnTo)?.origin !== new URL((yield* (yield* Store).apps.get(caller.appId)).url).origin) {
     return yield* new BadRequest({ message: "returnTo must be on the app's own origin" });
   }
   return yield* startOAuthConnect(provider, credential, { sessionId: null, returnTo });
@@ -88,9 +97,8 @@ const declared = Effect.fnUntraced(function* (caller: Install, port: string) {
 });
 
 /** The provider install a port is bound to, if it still exists in the caller's tenant. */
-const boundProvider = (caller: Install, port: string) =>
-  Store.useSync(({ installs }) => {
-    const binding = caller.bindings.get(port);
-    const provider = binding && installs.get(binding.installId);
-    return provider?.tenantId === caller.tenantId ? provider : undefined;
-  });
+const boundProvider = Effect.fnUntraced(function* (caller: Install, port: string) {
+  const binding = caller.bindings.get(port);
+  const provider = binding && (yield* (yield* Store).installs.lookup(binding.installId));
+  return provider?.tenantId === caller.tenantId ? provider : undefined;
+});
