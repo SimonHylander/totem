@@ -8,6 +8,7 @@ import {
   type SignedPlatformMethods,
 } from "@totem/protocol";
 import type { App } from "./define-app.js";
+import { runSigned, type Observability } from "./observability.js";
 import type { ActionInput, ActionName, ActionOutput, PortName } from "./types.js";
 
 type AppClientOptions = {
@@ -15,6 +16,8 @@ type AppClientOptions = {
   secret: string;
   platformUrl: string;
   fetch?: typeof fetch;
+  /** Each request is a client span. Without a parent it starts a new trace. */
+  observability?: Observability;
 };
 
 /**
@@ -23,12 +26,18 @@ type AppClientOptions = {
  * actions (ADR 0014). The other methods read the catalog and bind, unbind and connect the app's
  * ports (ADR 0015). The app is passed only to type actions and ports from its manifest.
  */
-export function appClient<M extends Manifest>(_app: App<M>, { secret, platformUrl, fetch: doFetch }: AppClientOptions) {
+export function appClient<M extends Manifest>(
+  _app: App<M>,
+  { secret, platformUrl, fetch: doFetch, observability = {} }: AppClientOptions,
+) {
   const call = <K extends keyof SignedPlatformMethods>(method: K, params: SignedPlatformMethods[K]["params"]) =>
-    rpc<SignedPlatformMethods, K>(platformUrl, method, params, {
-      sign: async (body) => ({ [SIGNATURE_HEADER]: await sign(secret, body) }),
-      ...(doFetch && { fetch: doFetch }),
-    });
+    runSigned(observability, method, (trace) =>
+      rpc<SignedPlatformMethods, K>(platformUrl, method, params, {
+        sign: async (body) => ({ [SIGNATURE_HEADER]: await sign(secret, body) }),
+        trace,
+        ...(doFetch && { fetch: doFetch }),
+      }),
+    );
 
   return {
     async start<K extends ActionName<M>>(installId: string, action: K, input: ActionInput<M, K>): Promise<ActionOutput<M, K>> {
