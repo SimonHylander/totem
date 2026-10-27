@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ErrorCode } from "@totem/protocol";
 import { appClient, defineApp, type Manifest } from "@totem/sdk";
+import { Store } from "./store.js";
 import { PLATFORM, testPlatform } from "./test-network.js";
 
 // The platform runs generic OAuth 2.0 (ADR 0012), so these tests use a made-up provider. The app
@@ -228,6 +229,28 @@ describe("OAuth connect", () => {
   });
 });
 
+describe("expiry", () => {
+  it("ends a browser session after 12 hours", async () => {
+    const { alice, installId, advance } = await setup();
+    const page = `/installs/${installId}/connect/crm`;
+    expect((await alice.get(page)).status).toBe(200);
+
+    await advance("12 hours");
+    const expired = await alice.get(page);
+    expect(expired.status).toBe(303);
+    expect(expired.headers.get("location")).toBe(`/signin?next=${encodeURIComponent(page)}`);
+  });
+
+  it("refuses a callback for a connect started more than 10 minutes ago", async () => {
+    const { installId, alice, provider, advance } = await setup();
+    const callbackPath = provider.consent((await alice.connect(installId, "crm")).headers.get("location")!);
+
+    await advance("10 minutes");
+    expect((await alice.get(callbackPath)).status).toBe(400);
+    expect(provider.tokenRequests).toEqual([]);
+  });
+});
+
 /** A consumer whose `whoami` port reaches the CRM app, as the events app reaches HubSpot. */
 const consumer = defineApp(
   {
@@ -247,7 +270,8 @@ describe("ports/connect", () => {
     const own = await env.install({ other: consumer });
     const client = appClient(consumer, { secret: env.secrets.get(own.appId)!, platformUrl: `${PLATFORM}/rpc`, fetch: env.network });
     await client.bind(own.installId, "whoami", { appId: env.appId, action: "whoami" });
-    const origin = new URL(env.platform.ctx.store.apps.get(own.appId)!.url).origin;
+    const app = await env.platform.runtime.runPromise(Store.useSync(({ apps }) => apps.get(own.appId)!));
+    const origin = new URL(app.url).origin;
     return { ...env, own, client, origin };
   }
 

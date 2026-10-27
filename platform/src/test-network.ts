@@ -1,7 +1,15 @@
 import { createHandler, type App, type Manifest } from "@totem/sdk";
+import { Effect, Layer, type Duration } from "effect";
+import { TestClock } from "effect/testing";
 import { createPlatform } from "./http.js";
 
-// Test harness: a platform, one app and any external services wired together in memory.
+// Test harness: a platform, one app and any external services wired together in memory. The
+// platform runs on a TestClock that starts at the wall clock, so signatures between the platform
+// and apps still verify, and time only moves when a test calls `advance`.
+
+const testClock = Layer.effectDiscard(Effect.suspend(() => TestClock.setTime(Date.now()))).pipe(
+  Layer.provideMerge(TestClock.layer()),
+);
 
 export const PLATFORM = "http://platform.test";
 export const APP = "http://app.test/";
@@ -32,7 +40,9 @@ export function testPlatform<M extends Manifest>(app: App<M>, external: External
     if (!response) throw new Error(`unreachable: ${request.url}`);
     return response;
   };
-  const platform = createPlatform({ baseUrl: PLATFORM, principals: [...principals], fetch: network });
+  const platform = createPlatform({ baseUrl: PLATFORM, principals: [...principals], fetch: network }, testClock);
+  /** Move the platform's clock forward. */
+  const advance = (duration: Duration.Input) => platform.runtime.runPromise(TestClock.adjust(duration));
 
   /** Call the management API with a bearer token. */
   const api = async (token: string, method: string, path: string, body?: unknown) => {
@@ -89,5 +99,5 @@ export function testPlatform<M extends Manifest>(app: App<M>, external: External
     };
   };
 
-  return { platform, network, api, register, install, browser, secrets };
+  return { platform, network, api, register, install, browser, secrets, advance };
 }
