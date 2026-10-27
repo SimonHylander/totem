@@ -5,5 +5,6 @@ export { fakePlatform, type FakePlatform } from "./fake-platform.js";
 export { createHandler } from "./handler.js";
 export { appClient } from "./app-client.js";
 export { serve } from "./serve.js";
+export type { Observability } from "./observability.js";
 export { AppError } from "./errors.js";
 export type { Manifest } from "@totem/protocol";
