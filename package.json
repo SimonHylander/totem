@@ -9,10 +9,12 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "live": "turbo run build --filter=@totem/example-events... && pnpm --filter @totem/example-events live",
-    "verify": "turbo run typecheck lint test"
+    "verify": "turbo run typecheck lint test && pnpm boundaries",
+    "boundaries": "depcruise protocol/src platform/src sdk/javascript-sdk/src packages/*/src examples/*/src examples/events/scripts --config .dependency-cruiser.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "dependency-cruiser": "^18.7.0",
     "effect": "^4.0.6",
     "eslint": "^10.13.0",
     "turbo": "^2.11.3",

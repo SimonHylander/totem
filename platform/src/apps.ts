@@ -244,6 +244,7 @@ function callApp<M extends keyof AppMethods>(
       return yield* Effect.tryPromise({
         try: () =>
           rpc<AppMethods, M>(app.url, method, params(span), {
+            // eslint-disable-next-line no-restricted-syntax -- rpc's signing callback is async
             sign: async (body) => ({ [SIGNATURE_HEADER]: await sign(app.secret.reveal(), body, timestamp) }),
             trace: formatTrace(span),
             fetch,

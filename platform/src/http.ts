@@ -209,12 +209,14 @@ export function platformLayer({ baseUrl, principals, allowLocalhost = false, fet
  */
 export function createPlatform<R = never>(options: PlatformOptions, layer: Layer.Layer<R> = Layer.empty as Layer.Layer<R>) {
   const runtime = ManagedRuntime.make(Layer.merge(platformLayer(options), layer));
+  // eslint-disable-next-line no-restricted-syntax -- the fetch-style handler servers call
   const handle = (request: Request): Promise<Response> => runtime.runPromise(handleRequest(request));
   return { handle, runtime };
 }
 
 const readJson = (request: Request) =>
   Effect.tryPromise({
+    // eslint-disable-next-line no-restricted-syntax -- Request.text() is a Promise
     try: async () => {
       const text = await request.text();
       return text === "" ? {} : (JSON.parse(text) as unknown);
