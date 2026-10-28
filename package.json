@@ -10,7 +10,8 @@
     "test": "turbo run test",
     "live": "turbo run build --filter=@totem/example-events... && pnpm --filter @totem/example-events live",
     "verify": "turbo run typecheck lint test && pnpm boundaries",
-    "boundaries": "depcruise protocol/src platform/src sdk/javascript-sdk/src packages/*/src examples/*/src examples/events/scripts --config .dependency-cruiser.cjs"
+    "boundaries": "depcruise protocol/src platform/src sdk/javascript-sdk/src packages/*/src examples/*/src examples/events/scripts --config .dependency-cruiser.cjs",
+    "verify:live": "turbo run build --filter=@totem/example-contacts... && pnpm --filter @totem/example-contacts live"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

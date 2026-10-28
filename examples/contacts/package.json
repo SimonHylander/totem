@@ -8,13 +8,15 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run",
-    "dev": "node --watch dist/server.js"
+    "dev": "node --watch dist/server.js",
+    "live": "node dist/live.js"
   },
   "dependencies": {
     "@totem/sdk": "workspace:*",
     "effect": "^4.0.6"
   },
   "devDependencies": {
+    "@totem/platform": "workspace:*",
     "@types/node": "^26.6.3",
     "typescript": "^5.9.3",
     "vitest": "^5.0.2"
