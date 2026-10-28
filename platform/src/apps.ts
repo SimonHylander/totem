@@ -1,5 +1,16 @@
 import { AppId, CallId, InstallId, type TenantId } from "@totem/ids";
 import {
+  HookSucceeded,
+  Pending,
+  checkBinding,
+  declaresPort,
+  requireActive,
+  transition,
+  withBinding,
+  type ActiveInstall,
+  type PortBinding,
+} from "@totem/installs";
+import {
   ErrorCode,
   PROTOCOL_VERSION,
   RpcError,
@@ -11,31 +22,12 @@ import {
   type Manifest,
   type TraceParent,
 } from "@totem/protocol";
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Result } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { authorize, type Principal } from "./access.js";
 import { mintCallbackToken, type CallbackClaims } from "./callback-token.js";
-import {
-  ActionNotProvided,
-  AppFailed,
-  CallDepthExceeded,
-  Conflict,
-  Forbidden,
-  InvalidManifest,
-  NotDeclared,
-  PortUnbound,
-} from "./errors.js";
-import {
-  PlatformConfig,
-  Sealed,
-  Store,
-  randomToken,
-  withEntry,
-  type AppRecord,
-  type Install,
-  type PortBinding,
-  type Visibility,
-} from "./store.js";
+import { AppFailed, CallDepthExceeded, Conflict, InvalidManifest, PortUnbound } from "./errors.js";
+import { PlatformConfig, Sealed, Store, randomToken, type AppRecord, type Install, type Visibility } from "./store.js";
 
 // Apps and installs: registration, manifest pull, install hooks and action invocation.
 
@@ -99,19 +91,19 @@ export const createInstall = Effect.fnUntraced(function* (
 
   const unbound = newInstall(tenantId, appId, config);
   const checked = new Map<string, PortBinding>();
-  for (const [port, binding] of Object.entries(bindings)) checked.set(port, yield* checkBinding(unbound, port, binding));
+  for (const [port, binding] of Object.entries(bindings)) checked.set(port, yield* bindingFor(unbound, port, binding));
   const install: Install = { ...unbound, bindings: checked };
   yield* store.installs.put(install);
-  yield* runInstallHook(app, install);
-  return install;
+  return yield* runInstallHook(app, install);
 });
 
-/** An install with no bindings, connections or state, not yet stored. */
+/** A Pending install with no bindings, connections or state, not yet stored. */
 export function newInstall(tenantId: TenantId, appId: AppId, config: Record<string, unknown>): Install {
   return {
     id: InstallId.make(crypto.randomUUID()),
     tenantId,
     appId,
+    status: Pending.make({}),
     config,
     bindings: new Map(),
     connections: new Map(),
@@ -119,7 +111,10 @@ export function newInstall(tenantId: TenantId, appId: AppId, config: Record<stri
   };
 }
 
-/** Run the app's optional `install` hook for a stored install. A failing hook removes the install again. */
+/**
+ * Run the app's optional `install` hook for a stored Pending install and return it Active. A failing
+ * hook removes the install again.
+ */
 export const runInstallHook = Effect.fnUntraced(function* (app: AppRecord, install: Install) {
   const store = yield* Store;
   const now = yield* Clock.currentTimeMillis;
@@ -133,6 +128,11 @@ export const runInstallHook = Effect.fnUntraced(function* (app: AppRecord, insta
     ),
     Effect.onError(() => store.installs.remove(install.id)),
   );
+  const activated = yield* store.installs.modify(install.id, (current) => {
+    const next = Result.map(transition(current.status, HookSucceeded.make({})), (status): Install => ({ ...current, status }));
+    return [next, Result.getOrElse(next, () => current)] as const;
+  });
+  return yield* Effect.fromResult(activated);
 });
 
 /** Set or replace one port binding on an existing install. */
@@ -145,8 +145,8 @@ export const setBinding = Effect.fnUntraced(function* (
   const { installs } = yield* Store;
   const install = yield* installs.get(installId);
   yield* authorize(principal, { type: "install.bind", install });
-  const checked = yield* checkBinding(install, port, binding);
-  yield* installs.update(installId, (current) => ({ ...current, bindings: withEntry(current.bindings, port, checked) }));
+  const checked = yield* bindingFor(install, port, binding);
+  yield* installs.update(installId, (current) => withBinding(current, port, checked));
 });
 
 /** Run one action and return its output. App failures surface as AppFailed. */
@@ -158,7 +158,7 @@ export const invokeAction = Effect.fnUntraced(function* (
 ) {
   const install = yield* (yield* Store).installs.get(installId);
   yield* authorize(principal, { type: "install.invoke", install });
-  return yield* runAction(install, action, input, 0);
+  return yield* runAction(yield* Effect.fromResult(requireActive(install)), action, input, 0);
 });
 
 /**
@@ -168,9 +168,7 @@ export const invokeAction = Effect.fnUntraced(function* (
 export const forwardPortCall = Effect.fnUntraced(function* (claims: CallbackClaims, port: string, input: unknown) {
   const { installs } = yield* Store;
   const install = yield* installs.get(claims.installId);
-  if (!(port in ((yield* manifestOf(install)).needs.actions ?? {}))) {
-    return yield* new NotDeclared({ message: `port "${port}" is not declared in the manifest` });
-  }
+  yield* Effect.fromResult(declaresPort(yield* manifestOf(install), port));
   const binding = install.bindings.get(port);
   const provider = binding && (yield* installs.lookup(binding.installId));
   if (!binding || provider?.tenantId !== install.tenantId) {
@@ -179,14 +177,19 @@ export const forwardPortCall = Effect.fnUntraced(function* (claims: CallbackClai
   if (claims.depth >= MAX_CALL_DEPTH) {
     return yield* new CallDepthExceeded({ message: `port calls nested deeper than ${MAX_CALL_DEPTH}` });
   }
-  return yield* runAction(provider, binding.action, input, claims.depth + 1);
+  return yield* runAction(yield* Effect.fromResult(requireActive(provider)), binding.action, input, claims.depth + 1);
 });
 
 /**
  * Invoke an action on an install's app with a fresh call ID and callback token. `depth` counts the
  * port calls that led here (ADR 0013). The app answers ActionNotFound for actions it does not provide.
  */
-export const runAction = Effect.fnUntraced(function* (install: Install, action: string, input: unknown, depth: number) {
+export const runAction = Effect.fnUntraced(function* (
+  install: ActiveInstall<Install>,
+  action: string,
+  input: unknown,
+  depth: number,
+) {
   const callId = CallId.make(crypto.randomUUID());
   const { apps, callbackKey } = yield* Store;
   const now = yield* Clock.currentTimeMillis;
@@ -200,19 +203,19 @@ export const runAction = Effect.fnUntraced(function* (install: Install, action: 
   return output;
 });
 
-/** A binding must name a declared port, an install of the same tenant, and an action that install provides. */
-const checkBinding = Effect.fnUntraced(function* (install: Install, port: string, binding: PortBinding) {
-  if (!(port in ((yield* manifestOf(install)).needs.actions ?? {}))) {
-    return yield* new NotDeclared({ message: `port ${port} is not declared in the manifest` });
-  }
+/** Load the provider a binding names and run the ADR 0013 checks on it. */
+const bindingFor = Effect.fnUntraced(function* (install: Install, port: string, binding: PortBinding) {
+  // An undeclared port fails before a missing provider does.
+  yield* Effect.fromResult(declaresPort(yield* manifestOf(install), port));
   const provider = yield* (yield* Store).installs.get(binding.installId);
-  if (provider.tenantId !== install.tenantId) {
-    return yield* new Forbidden({ message: `install ${binding.installId} belongs to another tenant` });
-  }
-  if (!(binding.action in ((yield* manifestOf(provider)).provides.actions ?? {}))) {
-    return yield* new ActionNotProvided({ message: `install ${binding.installId} does not provide ${binding.action}` });
-  }
-  return { installId: binding.installId, action: binding.action };
+  return yield* Effect.fromResult(
+    checkBinding(
+      { install, manifest: yield* manifestOf(install) },
+      port,
+      { install: provider, manifest: yield* manifestOf(provider) },
+      binding.action,
+    ),
+  );
 });
 
 /** The manifest of an installed app. Installs only exist for initialized apps. */

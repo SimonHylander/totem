@@ -1,3 +1,4 @@
+import type { ActionNotProvided, ForeignInstall, IllegalTransition, InstallNotActive, PortNotDeclared } from "@totem/installs";
 import { Schema } from "effect";
 
 // Domain failures. Operations fail with these and never name a wire format. The HTTP shell maps
@@ -21,11 +22,6 @@ export class BadRequest extends Schema.TaggedError<BadRequest>()("BadRequest", {
 
 /** A port, credential or state the caller's manifest does not declare. */
 export class NotDeclared extends Schema.TaggedError<NotDeclared>()("NotDeclared", { message: Schema.String }) {}
-
-/** An app's manifest does not provide the action a binding names. */
-export class ActionNotProvided extends Schema.TaggedError<ActionNotProvided>()("ActionNotProvided", {
-  message: Schema.String,
-}) {}
 
 export class PortUnbound extends Schema.TaggedError<PortUnbound>()("PortUnbound", { message: Schema.String }) {}
 
@@ -65,7 +61,11 @@ export type PlatformError =
   | Conflict
   | BadRequest
   | NotDeclared
+  | PortNotDeclared
   | ActionNotProvided
+  | ForeignInstall
+  | InstallNotActive
+  | IllegalTransition
   | PortUnbound
   | CallDepthExceeded
   | CredentialMissing

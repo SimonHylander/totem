@@ -70,4 +70,22 @@ describe("actions/start", () => {
     });
     expect(await response.json()).toMatchObject({ error: { code: ErrorCode.MethodNotFound } });
   });
+
+  it("refuses an install whose install hook has not finished", async () => {
+    let refused: unknown;
+    const early = defineApp(counter.manifest, {
+      ...counter.handlers,
+      install: async ({ installId }) => {
+        refused = await appClient(counter, { secret: env.secrets.get(appId)!, platformUrl: `${PLATFORM}/rpc`, fetch: env.network })
+          .start(installId, "count", {})
+          .catch((error: unknown) => error);
+      },
+    });
+    const env = testPlatform(early);
+    const appId = await env.register();
+    await env.api("op", "POST", `/api/apps/${appId}/initialize`);
+    await env.api("acme", "POST", "/api/tenants/acme/installs", { appId });
+
+    expect(refused).toMatchObject({ code: ErrorCode.InvalidRequest });
+  });
 });
