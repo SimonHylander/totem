@@ -12,6 +12,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
     "test": "vitest run",
     "dev": "node --watch dist/server.js",
     "hs:upload": "cd totem-test && hs project upload",

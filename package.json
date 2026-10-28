@@ -8,10 +8,15 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "live": "turbo run build --filter=@totem/example-events... && pnpm --filter @totem/example-events live"
+    "live": "turbo run build --filter=@totem/example-events... && pnpm --filter @totem/example-events live",
+    "verify": "turbo run typecheck lint test"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "effect": "^4.0.6",
-    "turbo": "^2.11.3"
+    "eslint": "^10.13.0",
+    "turbo": "^2.11.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1"
   }
 }

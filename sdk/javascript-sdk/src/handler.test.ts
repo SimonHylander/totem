@@ -51,8 +51,8 @@ function platformFetch(platform: FakePlatform): typeof fetch {
     const dispatch: { [K in keyof PlatformMethods]: (p: PlatformMethods[K]["params"]) => Promise<PlatformMethods[K]["result"]> } = {
       "credentials/get": ({ name }) => platform.getCredential(name),
       "state/get": async ({ key }) => ({ value: await platform.getState(key) }),
-      "state/set": async ({ key, value }) => ({}) as never,
-      log: async ({ level, message, data }) => ({}) as never,
+      "state/set": async () => ({}) as never,
+      log: async () => ({}) as never,
       "actions/invoke": async ({ port, input }) => ({ output: await platform.invokePort(port, input) }),
     };
     if (method === "state/set") await platform.setState(params["key"], params["value"]);
