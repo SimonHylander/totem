@@ -9,4 +9,5 @@ export {
   type InstallCore,
   type PortBinding,
 } from "./model.js";
+export { InstallRepo } from "./port.js";
 export { checkBinding, declaresPort, providesAction, requireActive, transition, withBinding } from "./transitions.js";

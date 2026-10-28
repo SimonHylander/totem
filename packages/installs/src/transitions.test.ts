@@ -30,6 +30,7 @@ const install = (overrides: Partial<InstallCore> = {}, appManifest = manifest([]
   appId: AppId.make("app"),
   version: { id: VersionId.make("v1"), appId: AppId.make("app"), manifest: appManifest, pulledAt: DateTime.makeUnsafe(0) },
   status: Active.make({}),
+  config: {},
   bindings: new Map(),
   ...overrides,
 });

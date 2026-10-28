@@ -1,5 +1,6 @@
 import type { ActionNotProvided, ForeignInstall, IllegalTransition, InstallNotActive, PortNotDeclared } from "@totem/installs";
 import type { Forbidden } from "@totem/permissions";
+import type { AppFailed, CallDepthExceeded, PortUnbound } from "@totem/runtime";
 import type { IncompatibleVersion } from "@totem/versions";
 import { Schema } from "effect";
 
@@ -12,6 +13,7 @@ export class Unauthenticated extends Schema.TaggedError<Unauthenticated>()("Unau
 }) {}
 
 export { Forbidden } from "@totem/permissions";
+export { AppFailed, CallDepthExceeded, PortUnbound } from "@totem/runtime";
 
 export class NotFound extends Schema.TaggedError<NotFound>()("NotFound", { message: Schema.String }) {}
 
@@ -23,13 +25,6 @@ export class BadRequest extends Schema.TaggedError<BadRequest>()("BadRequest", {
 
 /** A port, credential or state the caller's manifest does not declare. */
 export class NotDeclared extends Schema.TaggedError<NotDeclared>()("NotDeclared", { message: Schema.String }) {}
-
-export class PortUnbound extends Schema.TaggedError<PortUnbound>()("PortUnbound", { message: Schema.String }) {}
-
-/** A port call nested past the depth limit (ADR 0013). */
-export class CallDepthExceeded extends Schema.TaggedError<CallDepthExceeded>()("CallDepthExceeded", {
-  message: Schema.String,
-}) {}
 
 export class CredentialMissing extends Schema.TaggedError<CredentialMissing>()("CredentialMissing", {
   message: Schema.String,
@@ -43,16 +38,6 @@ export class InvalidManifest extends Schema.TaggedError<InvalidManifest>()("Inva
 /** An OAuth provider's token endpoint failed or answered something unusable. */
 export class ProviderFailed extends Schema.TaggedError<ProviderFailed>()("ProviderFailed", {
   message: Schema.String,
-}) {}
-
-/**
- * An app answered a platform call with a JSON-RPC error. Both shells pass it through unchanged, so a
- * forwarded port call surfaces the provider's own error (ADR 0013).
- */
-export class AppFailed extends Schema.TaggedError<AppFailed>()("AppFailed", {
-  code: Schema.Number,
-  message: Schema.String,
-  data: Schema.optional(Schema.Unknown),
 }) {}
 
 export type PlatformError =

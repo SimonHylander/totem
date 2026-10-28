@@ -1,4 +1,6 @@
 import { AppId, InstallId, TenantId } from "@totem/ids";
+import type { InstallRepo } from "@totem/installs";
+import type { AppTransport } from "@totem/runtime";
 import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { FetchHttpClient, Headers, HttpTraceContext, type HttpClient } from "effect/http";
 import { Principal, authorize, type ManagementAction } from "@totem/permissions";
@@ -13,6 +15,7 @@ import {
   setVisibility,
   upgradeInstall,
 } from "./apps.js";
+import { appTransportLayer, installRepoLayer } from "./adapters.js";
 import { browserRoute, errorPage, handleBrowser } from "./browser.js";
 import { connectApiKey, setOAuthClient } from "./connections.js";
 import { BadRequest, type PlatformError } from "./errors.js";
@@ -31,7 +34,7 @@ export type PlatformOptions = {
   fetch?: typeof fetch;
 };
 
-type Services = Store | PlatformConfig | HttpClient.HttpClient;
+type Services = Store | PlatformConfig | HttpClient.HttpClient | AppTransport | InstallRepo;
 
 const NonEmpty = Schema.NonEmptyString;
 const PortBinding = Schema.Struct({ installId: InstallId, action: NonEmpty });
@@ -239,8 +242,9 @@ const handleRequest = (request: Request): Effect.Effect<Response, never, Service
 
 /** The services every operation runs with. `fetch` reaches apps, and OAuth providers through HttpClient. */
 export function platformLayer({ baseUrl, principals, allowLocalhost = false, fetch }: PlatformOptions) {
+  const store = Store.layer(new Map(principals.map(({ token, principal }) => [hashToken(token), Schema.decodeUnknownSync(Principal)(principal)])));
   return Layer.mergeAll(
-    Store.layer(new Map(principals.map(({ token, principal }) => [hashToken(token), Schema.decodeUnknownSync(Principal)(principal)]))),
+    Layer.provideMerge(Layer.mergeAll(installRepoLayer, appTransportLayer), store),
     Layer.succeed(PlatformConfig, { baseUrl, allowLocalhost }),
     FetchHttpClient.layer,
     fetch ? Layer.succeed(FetchHttpClient.Fetch, fetch) : Layer.empty,

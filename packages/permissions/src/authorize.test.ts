@@ -17,6 +17,7 @@ const install: InstallCore = {
     pulledAt: DateTime.makeUnsafe(0),
   },
   status: Active.make({}),
+  config: {},
   bindings: new Map(),
 };
 const foreign: InstallCore = { ...install, tenantId: TenantId.make("globex") };
