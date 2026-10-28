@@ -368,6 +368,19 @@ describe("OAuth client changes", () => {
     expect(provider.tokenRequests).toHaveLength(requestsBefore);
   });
 
+  it("does not hand out a token refreshed under a client that changed meanwhile", async () => {
+    const { api, appId, connect, whoami, provider } = await setup({ expiresIn: 60 });
+    await connect();
+    const release = provider.holdRefresh();
+
+    const pending = whoami();
+    await vi.waitFor(() => expect(provider.tokenRequests).toHaveLength(2));
+    await api("op", "PUT", `/api/apps/${appId}/oauth-clients/crm`, { clientId: "other-client", clientSecret: "s" });
+    release();
+
+    expect((await pending).body).toMatchObject({ error: { code: -32002 } });
+  });
+
   it("does not revive old grants when the original client is set again", async () => {
     const { api, appId, connect, whoami } = await setup();
     await connect();

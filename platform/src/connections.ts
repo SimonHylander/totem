@@ -200,7 +200,8 @@ export const getCredential = Effect.fnUntraced(function* (claims: CallbackClaims
 
   const stale = DateTime.isLessThanOrEqualTo(connection.expiresAt, DateTime.add(yield* DateTime.now, REFRESH_MARGIN));
   const fresh = stale ? yield* refresh(install, name, binding, connection) : connection;
-  if (!fresh) return yield* missing;
+  // The client may have changed while the refresh ran. A grant of the old client reads as missing.
+  if (!fresh || (stale && fresh.binding !== (yield* apps.get(install.appId)).oauthBindings.get(name))) return yield* missing;
   return {
     type: "oauth2",
     accessToken: fresh.accessToken.reveal(),
