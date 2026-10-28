@@ -1,4 +1,5 @@
-import type { AppId, InstallId, TenantId } from "@totem/ids";
+import type { AppId, InstallId } from "@totem/ids";
+import type { InstallCore } from "@totem/installs";
 import type { Endpoint, Manifest } from "@totem/protocol";
 import { Context, type DateTime, type Deferred, Effect, Layer, Ref } from "effect";
 import type { Principal, Session } from "./access.js";
@@ -105,16 +106,9 @@ export type PendingConnect = {
   readonly expiresAt: DateTime.Utc;
 };
 
-/** Where a port's calls go: an action on another install of the same tenant (ADR 0013). */
-export type PortBinding = { readonly installId: InstallId; readonly action: string };
-
-export type Install = {
-  readonly id: InstallId;
-  readonly tenantId: TenantId;
-  readonly appId: AppId;
+/** An install as the platform stores it: the lifecycle and bindings of `@totem/installs`, plus its config, credentials and state. */
+export type Install = InstallCore & {
   readonly config: Readonly<Record<string, unknown>>;
-  /** By port name. A declared port with no entry is unbound. */
-  readonly bindings: ReadonlyMap<string, PortBinding>;
   /** By credential name. Deleting the install deletes them. */
   readonly connections: ReadonlyMap<string, Connection>;
   /** Install-scoped key-value state for apps that declare `needs.state`. */

@@ -12,6 +12,7 @@ import {
   type SignedPlatformMethods,
 } from "@totem/protocol";
 import { AppId, InstallId } from "@totem/ids";
+import { requireActive } from "@totem/installs";
 import { Clock, Effect, Schema, Tracer } from "effect";
 import type { HttpClient } from "effect/http";
 import { bearerToken } from "./access.js";
@@ -125,7 +126,8 @@ type SignedMethods = {
 const signedMethods: SignedMethods = {
   "actions/start": Effect.fnUntraced(function* (install, params) {
     if (!("input" in params)) return yield* new BadRequest({ message: "input is required" });
-    return { output: yield* runAction(install, yield* string(params, "action"), params["input"], 0) };
+    const action = yield* string(params, "action");
+    return { output: yield* runAction(yield* Effect.fromResult(requireActive(install)), action, params["input"], 0) };
   }),
 
   "apps/list": (install) => Effect.map(listApps(install), (apps) => ({ apps })),
@@ -222,7 +224,11 @@ const RPC_CODES: { [K in Exclude<PlatformError["_tag"], "AppFailed">]: number } 
   Conflict: ErrorCode.InvalidParams,
   BadRequest: ErrorCode.InvalidParams,
   NotDeclared: ErrorCode.NotDeclared,
+  PortNotDeclared: ErrorCode.NotDeclared,
   ActionNotProvided: ErrorCode.ActionNotFound,
+  ForeignInstall: ErrorCode.Unauthorized,
+  InstallNotActive: ErrorCode.InvalidRequest,
+  IllegalTransition: ErrorCode.InvalidRequest,
   PortUnbound: ErrorCode.PortUnbound,
   CallDepthExceeded: ErrorCode.InvalidRequest,
   CredentialMissing: ErrorCode.CredentialMissing,
