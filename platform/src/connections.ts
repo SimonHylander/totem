@@ -3,7 +3,8 @@ import type { AppId, InstallId } from "@totem/ids";
 import type { CredentialStatus, CredentialValue } from "@totem/protocol";
 import { DateTime, Deferred, Effect, Option, Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
-import { authorize, type Principal, type Session } from "./access.js";
+import { authorize, type Authorized } from "@totem/permissions";
+import type { InstallAction, Session } from "./access.js";
 import { manifestOf } from "./apps.js";
 import type { CallbackClaims } from "./callback-token.js";
 import { BadRequest, Conflict, CredentialMissing, Forbidden, NotDeclared, NotFound, ProviderFailed } from "./errors.js";
@@ -38,12 +39,11 @@ export const redirectUriFor = (bindingId: string) =>
  * grants read as missing until each tenant reconnects. Returns what the operator registers at the provider.
  */
 export const setOAuthClient = Effect.fnUntraced(function* (
-  principal: Principal,
+  _: Authorized<{ type: "app.setOAuthClient" }>,
   appId: AppId,
   name: string,
   client: { clientId: string; clientSecret: string },
 ) {
-  yield* authorize(principal, { type: "app.setOAuthClient" });
   const { apps } = yield* Store;
   const app = yield* apps.get(appId);
   const need = app.manifest?.needs.credentials?.[name];
@@ -69,9 +69,11 @@ export const setOAuthClient = Effect.fnUntraced(function* (
  * Start an OAuth connect from a signed-in browser. Returns the provider URL to redirect to. The
  * current connection, if any, keeps working until the new one is stored.
  */
-export const beginOAuthConnect = Effect.fnUntraced(function* (session: Session, installId: InstallId, name: string) {
-  const install = yield* (yield* Store).installs.get(installId);
-  yield* authorize(session.principal, { type: "install.connect", install });
+export const beginOAuthConnect = Effect.fnUntraced(function* (
+  session: Session,
+  { action: { install } }: Authorized<InstallAction<"install.connect">>,
+  name: string,
+) {
   return yield* startOAuthConnect(install, name, { sessionId: session.id, returnTo: null });
 });
 
@@ -133,7 +135,7 @@ export const finishOAuthConnect = Effect.fnUntraced(function* (
   if ("error" in query) return yield* new BadRequest({ message: `the provider returned ${query.error}` });
 
   const install = yield* store.installs.get(pending.installId);
-  if (session && pending.sessionId !== null) yield* authorize(session.principal, { type: "install.connect", install });
+  if (session && pending.sessionId !== null) yield* Effect.fromResult(authorize(session.principal, { type: "install.connect", install }));
   const { binding } = yield* oauthBinding(install, pending.credential);
   if (binding !== pending.binding) return yield* new Conflict({ message: "the OAuth client changed during the connect" });
 
@@ -162,17 +164,14 @@ export const credentialStatus = Effect.fnUntraced(function* (install: Install) {
 
 /** Store the API key a tenant admin entered. Idempotent. */
 export const connectApiKey = Effect.fnUntraced(function* (
-  principal: Principal,
-  installId: InstallId,
+  { action: { install } }: Authorized<InstallAction<"install.connect">>,
   name: string,
   key: string,
 ) {
-  const install = yield* (yield* Store).installs.get(installId);
-  yield* authorize(principal, { type: "install.connect", install });
   if ((yield* manifestOf(install)).needs.credentials?.[name]?.type !== "apiKey") {
     return yield* new NotFound({ message: `no apiKey credential ${name}` });
   }
-  yield* setConnection(installId, name, { type: "apiKey", key: new Sealed(key) });
+  yield* setConnection(install.id, name, { type: "apiKey", key: new Sealed(key) });
 });
 
 const setConnection = (installId: InstallId, name: string, connection: Connection) =>

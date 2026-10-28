@@ -1,4 +1,5 @@
 import type { ActionNotProvided, ForeignInstall, IllegalTransition, InstallNotActive, PortNotDeclared } from "@totem/installs";
+import type { Forbidden } from "@totem/permissions";
 import { Schema } from "effect";
 
 // Domain failures. Operations fail with these and never name a wire format. The HTTP shell maps
@@ -9,8 +10,7 @@ export class Unauthenticated extends Schema.TaggedError<Unauthenticated>()("Unau
   message: Schema.String,
 }) {}
 
-/** `can` refused, or a record belongs to another tenant or session. */
-export class Forbidden extends Schema.TaggedError<Forbidden>()("Forbidden", { message: Schema.String }) {}
+export { Forbidden } from "@totem/permissions";
 
 export class NotFound extends Schema.TaggedError<NotFound>()("NotFound", { message: Schema.String }) {}
 

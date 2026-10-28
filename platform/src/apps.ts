@@ -24,7 +24,8 @@ import {
 } from "@totem/protocol";
 import { Clock, Effect, Result } from "effect";
 import { FetchHttpClient } from "effect/http";
-import { authorize, type Principal } from "./access.js";
+import type { Authorized } from "@totem/permissions";
+import type { InstallAction } from "./access.js";
 import { mintCallbackToken, type CallbackClaims } from "./callback-token.js";
 import { AppFailed, CallDepthExceeded, Conflict, InvalidManifest, PortUnbound } from "./errors.js";
 import { PlatformConfig, Sealed, Store, randomToken, type AppRecord, type Install, type Visibility } from "./store.js";
@@ -41,8 +42,7 @@ const MAX_CALL_DEPTH = 8;
  * Register an app URL and issue its HMAC secret, shown once. The operator starts the app with the
  * secret, then calls `initializeApp` to pull the manifest.
  */
-export const registerApp = Effect.fnUntraced(function* (principal: Principal, url: string) {
-  yield* authorize(principal, { type: "app.register" });
+export const registerApp = Effect.fnUntraced(function* (_: Authorized<{ type: "app.register" }>, url: string) {
   const secret = randomToken();
   const app: AppRecord = {
     id: AppId.make(crypto.randomUUID()),
@@ -57,8 +57,7 @@ export const registerApp = Effect.fnUntraced(function* (principal: Principal, ur
 });
 
 /** Pull the manifest through `initialize` (ADR 0007). Calling it again re-pulls. */
-export const initializeApp = Effect.fnUntraced(function* (principal: Principal, appId: AppId) {
-  yield* authorize(principal, { type: "app.register" });
+export const initializeApp = Effect.fnUntraced(function* (_: Authorized<{ type: "app.register" }>, appId: AppId) {
   const { apps } = yield* Store;
   const platformUrl = (yield* PlatformConfig).baseUrl + PLATFORM_METHODS_PATH;
   const { manifest } = yield* callApp(yield* apps.get(appId), "initialize", "initialize", {}, () => ({
@@ -71,20 +70,21 @@ export const initializeApp = Effect.fnUntraced(function* (principal: Principal, 
 });
 
 /** Make an app public or internal (ADR 0015). New apps start internal. */
-export const setVisibility = Effect.fnUntraced(function* (principal: Principal, appId: AppId, visibility: Visibility) {
-  yield* authorize(principal, { type: "app.setVisibility" });
+export const setVisibility = Effect.fnUntraced(function* (
+  _: Authorized<{ type: "app.setVisibility" }>,
+  appId: AppId,
+  visibility: Visibility,
+) {
   yield* (yield* Store).apps.update(appId, (app) => ({ ...app, visibility }));
 });
 
 /** Install an app for a tenant, bind its ports and run its optional `install` hook. */
 export const createInstall = Effect.fnUntraced(function* (
-  principal: Principal,
-  tenantId: TenantId,
+  { action: { tenantId } }: Authorized<{ type: "install.create"; tenantId: TenantId }>,
   appId: AppId,
   config: Record<string, unknown>,
   bindings: Record<string, PortBinding>,
 ) {
-  yield* authorize(principal, { type: "install.create", tenantId });
   const store = yield* Store;
   const app = yield* store.apps.get(appId);
   if (!app.manifest) return yield* new Conflict({ message: `app ${appId} has no manifest yet. Initialize it first.` });
@@ -137,27 +137,20 @@ export const runInstallHook = Effect.fnUntraced(function* (app: AppRecord, insta
 
 /** Set or replace one port binding on an existing install. */
 export const setBinding = Effect.fnUntraced(function* (
-  principal: Principal,
-  installId: InstallId,
+  { action: { install } }: Authorized<InstallAction<"install.bind">>,
   port: string,
   binding: PortBinding,
 ) {
-  const { installs } = yield* Store;
-  const install = yield* installs.get(installId);
-  yield* authorize(principal, { type: "install.bind", install });
   const checked = yield* bindingFor(install, port, binding);
-  yield* installs.update(installId, (current) => withBinding(current, port, checked));
+  yield* (yield* Store).installs.update(install.id, (current) => withBinding(current, port, checked));
 });
 
 /** Run one action and return its output. App failures surface as AppFailed. */
 export const invokeAction = Effect.fnUntraced(function* (
-  principal: Principal,
-  installId: InstallId,
+  { action: { install } }: Authorized<InstallAction<"install.invoke">>,
   action: string,
   input: unknown,
 ) {
-  const install = yield* (yield* Store).installs.get(installId);
-  yield* authorize(principal, { type: "install.invoke", install });
   return yield* runAction(yield* Effect.fromResult(requireActive(install)), action, input, 0);
 });
 
