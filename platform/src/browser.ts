@@ -1,6 +1,6 @@
 import { InstallId } from "@totem/ids";
 import { Effect, Schema } from "effect";
-import { csrfToken, sessionFor, signIn, type Session } from "./access.js";
+import { authorizeInstall, csrfToken, sessionFor, signIn, type Session } from "./access.js";
 import { OAUTH_CALLBACK_PATH, beginOAuthConnect, finishOAuthConnect, type CallbackQuery } from "./connections.js";
 import { BadRequest, Forbidden } from "./errors.js";
 import { PlatformConfig } from "./store.js";
@@ -45,7 +45,8 @@ export const handleBrowser = Effect.fnUntraced(function* (request: Request) {
     const installId = yield* Schema.decodeUnknownEffect(InstallId)(connect["installId"]).pipe(
       Effect.mapError(() => new BadRequest({ message: "invalid install ID" })),
     );
-    return redirect(yield* beginOAuthConnect(session, installId, connect["name"]!));
+    const auth = yield* authorizeInstall(session.principal, installId, "install.connect");
+    return redirect(yield* beginOAuthConnect(session, auth, connect["name"]!));
   }
 
   const callback = CALLBACK.exec(url.pathname)?.groups;

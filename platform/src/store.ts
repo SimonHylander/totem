@@ -2,7 +2,8 @@ import type { AppId, InstallId } from "@totem/ids";
 import type { InstallCore } from "@totem/installs";
 import type { Endpoint, Manifest } from "@totem/protocol";
 import { Context, type DateTime, type Deferred, Effect, Layer, Ref } from "effect";
-import type { Principal, Session } from "./access.js";
+import type { Principal } from "@totem/permissions";
+import type { Session } from "./access.js";
 import { NotFound, type ProviderFailed } from "./errors.js";
 
 // In-memory platform state. Everything is lost on restart (ADR 0011). Records are immutable: every

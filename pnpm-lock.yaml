@@ -161,7 +161,27 @@ importers:
         specifier: ^5.0.2
         version: 5.0.2(@opentelemetry/api@1.10.0)(@types/node@26.6.3)(vite@8.3.5(@types/node@26.6.3)(jiti@2.7.0))
 
-  packages/permissions: {}
+  packages/permissions:
+    dependencies:
+      '@totem/ids':
+        specifier: workspace:*
+        version: link:../ids
+      '@totem/installs':
+        specifier: workspace:*
+        version: link:../installs
+      effect:
+        specifier: ^4.0.6
+        version: 4.0.6
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.3
+        version: 26.6.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^5.0.2
+        version: 5.0.2(@opentelemetry/api@1.10.0)(@types/node@26.6.3)(vite@8.3.5(@types/node@26.6.3)(jiti@2.7.0))
 
   packages/runtime: {}
 
@@ -175,6 +195,9 @@ importers:
       '@totem/installs':
         specifier: workspace:*
         version: link:../packages/installs
+      '@totem/permissions':
+        specifier: workspace:*
+        version: link:../packages/permissions
       '@totem/protocol':
         specifier: workspace:*
         version: link:../protocol

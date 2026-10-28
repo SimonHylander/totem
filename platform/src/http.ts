@@ -1,7 +1,8 @@
 import { AppId, InstallId, TenantId } from "@totem/ids";
 import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { FetchHttpClient, Headers, HttpTraceContext, type HttpClient } from "effect/http";
-import { authenticate, bearerToken, hashToken, Principal } from "./access.js";
+import { Principal, authorize, type ManagementAction } from "@totem/permissions";
+import { authenticate, authorizeInstall, bearerToken, hashToken } from "./access.js";
 import {
   PLATFORM_METHODS_PATH,
   createInstall,
@@ -17,7 +18,7 @@ import { BadRequest, type PlatformError } from "./errors.js";
 import { handlePlatformMethod } from "./platform-methods.js";
 import { PlatformConfig, Store } from "./store.js";
 
-// The HTTP shell. Routes decode the request and call one operation. Operations authorize themselves.
+// The HTTP shell. Routes decode the request, authorize it and call one operation with the proof.
 // This is the only place that maps domain failures to HTTP statuses.
 
 export type PlatformOptions = {
@@ -69,24 +70,37 @@ function route<P extends Schema.Decoder<unknown>, S extends Schema.Decoder<unkno
 
 const NoParams = Schema.Struct({});
 
+/** Authorize an action that names no install. */
+const allowed = <A extends ManagementAction>(principal: Principal, action: A) => Effect.fromResult(authorize(principal, action));
+
 const routes: Route[] = [
-  route("POST", "/api/apps", NoParams, Schema.Struct({ url: NonEmpty }), (principal, _, { url }) => registerApp(principal, url)),
+  route("POST", "/api/apps", NoParams, Schema.Struct({ url: NonEmpty }), (principal, _, { url }) =>
+    Effect.flatMap(allowed(principal, { type: "app.register" }), (auth) => registerApp(auth, url)),
+  ),
   route("POST", "/api/apps/:appId/initialize", Schema.Struct({ appId: AppId }), Schema.Unknown, (principal, { appId }) =>
-    Effect.map(initializeApp(principal, appId), (manifest) => ({ manifest })),
+    allowed(principal, { type: "app.register" }).pipe(
+      Effect.flatMap((auth) => initializeApp(auth, appId)),
+      Effect.map((manifest) => ({ manifest })),
+    ),
   ),
   route(
     "PUT",
     "/api/apps/:appId/visibility",
     Schema.Struct({ appId: AppId }),
     Schema.Struct({ visibility: Schema.Literals(["public", "internal"]) }),
-    (principal, { appId }, { visibility }) => Effect.as(setVisibility(principal, appId, visibility), {}),
+    (principal, { appId }, { visibility }) =>
+      allowed(principal, { type: "app.setVisibility" }).pipe(
+        Effect.flatMap((auth) => setVisibility(auth, appId, visibility)),
+        Effect.as({}),
+      ),
   ),
   route(
     "PUT",
     "/api/apps/:appId/oauth-clients/:name",
     Schema.Struct({ appId: AppId, name: NonEmpty }),
     Schema.Struct({ clientId: NonEmpty, clientSecret: NonEmpty }),
-    (principal, { appId, name }, client) => setOAuthClient(principal, appId, name, client),
+    (principal, { appId, name }, client) =>
+      Effect.flatMap(allowed(principal, { type: "app.setOAuthClient" }), (auth) => setOAuthClient(auth, appId, name, client)),
   ),
   route(
     "POST",
@@ -98,21 +112,32 @@ const routes: Route[] = [
       bindings: Schema.optionalKey(Schema.Record(Schema.String, PortBinding)),
     }),
     (principal, { tenantId }, { appId, config = {}, bindings = {} }) =>
-      Effect.map(createInstall(principal, tenantId, appId, config, bindings), (install) => ({ installId: install.id })),
+      allowed(principal, { type: "install.create", tenantId }).pipe(
+        Effect.flatMap((auth) => createInstall(auth, appId, config, bindings)),
+        Effect.map((install) => ({ installId: install.id })),
+      ),
   ),
   route(
     "PUT",
     "/api/installs/:installId/bindings/:port",
     Schema.Struct({ installId: InstallId, port: NonEmpty }),
     PortBinding,
-    (principal, { installId, port }, binding) => Effect.as(setBinding(principal, installId, port, binding), {}),
+    (principal, { installId, port }, binding) =>
+      authorizeInstall(principal, installId, "install.bind").pipe(
+        Effect.flatMap((auth) => setBinding(auth, port, binding)),
+        Effect.as({}),
+      ),
   ),
   route(
     "PUT",
     "/api/installs/:installId/connections/:name/api-key",
     Schema.Struct({ installId: InstallId, name: NonEmpty }),
     Schema.Struct({ key: NonEmpty }),
-    (principal, { installId, name }, { key }) => Effect.as(connectApiKey(principal, installId, name, key), {}),
+    (principal, { installId, name }, { key }) =>
+      authorizeInstall(principal, installId, "install.connect").pipe(
+        Effect.flatMap((auth) => connectApiKey(auth, name, key)),
+        Effect.as({}),
+      ),
   ),
   route(
     "POST",
@@ -120,7 +145,10 @@ const routes: Route[] = [
     Schema.Struct({ installId: InstallId, action: NonEmpty }),
     Schema.Struct({ input: Schema.optionalKey(Schema.Unknown) }),
     (principal, { installId, action }, { input = {} }) =>
-      Effect.map(invokeAction(principal, installId, action, input), (output) => ({ output })),
+      authorizeInstall(principal, installId, "install.invoke").pipe(
+        Effect.flatMap((auth) => invokeAction(auth, action, input)),
+        Effect.map((output) => ({ output })),
+      ),
   ),
 ];
 
