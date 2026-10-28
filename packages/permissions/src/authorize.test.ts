@@ -1,6 +1,6 @@
-import { AppId, InstallId, TenantId } from "@totem/ids";
+import { AppId, InstallId, TenantId, VersionId } from "@totem/ids";
 import { Active, type InstallCore } from "@totem/installs";
-import { Result } from "effect";
+import { DateTime, Result } from "effect";
 import { describe, expect, it } from "vitest";
 import { authorize, can, type Authorized } from "./authorize.js";
 import type { ManagementAction, Principal } from "./model.js";
@@ -10,6 +10,12 @@ const install: InstallCore = {
   id: InstallId.make("i-1"),
   tenantId: acme,
   appId: AppId.make("a-1"),
+  version: {
+    id: VersionId.make("v-1"),
+    appId: AppId.make("a-1"),
+    manifest: { name: "crm", version: "1.0.0", protocol: "1", provides: {}, needs: {} },
+    pulledAt: DateTime.makeUnsafe(0),
+  },
   status: Active.make({}),
   bindings: new Map(),
 };
@@ -31,6 +37,8 @@ const table: [ManagementAction, boolean][] = [
   [{ type: "install.bind", install: foreign }, false],
   [{ type: "install.invoke", install }, true],
   [{ type: "install.invoke", install: foreign }, false],
+  [{ type: "install.upgrade", install }, true],
+  [{ type: "install.upgrade", install: foreign }, false],
 ];
 
 describe("can", () => {

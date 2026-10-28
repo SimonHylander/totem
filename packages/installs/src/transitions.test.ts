@@ -1,6 +1,6 @@
-import { AppId, InstallId, TenantId } from "@totem/ids";
+import { AppId, InstallId, TenantId, VersionId } from "@totem/ids";
 import type { Manifest } from "@totem/protocol";
-import { Result } from "effect";
+import { DateTime, Result } from "effect";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { Active, HookSucceeded, Pending, type InstallCore, type InstallEvent, type InstallStatus } from "./model.js";
@@ -15,21 +15,23 @@ const table: [InstallStatus, InstallEvent, InstallStatus["_tag"] | null][] = [
   [Active.make({}), HookSucceeded.make({}), null],
 ];
 
-const install = (overrides: Partial<InstallCore> = {}): InstallCore => ({
-  id: InstallId.make("consumer"),
-  tenantId: TenantId.make("acme"),
-  appId: AppId.make("app"),
-  status: Active.make({}),
-  bindings: new Map(),
-  ...overrides,
-});
-
 const manifest = (needs: string[], provides: string[]): Manifest => ({
   name: "app",
   version: "0.1.0",
   protocol: "1",
   provides: { actions: Object.fromEntries(provides.map((action) => [action, { input: {}, output: {} }])) },
   needs: { actions: Object.fromEntries(needs.map((port) => [port, { input: {}, output: {} }])) },
+});
+
+/** An Active install of acme running `app` with `appManifest`. */
+const install = (overrides: Partial<InstallCore> = {}, appManifest = manifest([], [])): InstallCore => ({
+  id: InstallId.make("consumer"),
+  tenantId: TenantId.make("acme"),
+  appId: AppId.make("app"),
+  version: { id: VersionId.make("v1"), appId: AppId.make("app"), manifest: appManifest, pulledAt: DateTime.makeUnsafe(0) },
+  status: Active.make({}),
+  bindings: new Map(),
+  ...overrides,
 });
 
 describe("transition", () => {
@@ -72,8 +74,8 @@ describe("requireActive", () => {
 });
 
 describe("checkBinding", () => {
-  const consumer = { install: install(), manifest: manifest(["crm"], []) };
-  const provider = { install: install({ id: InstallId.make("provider") }), manifest: manifest([], ["upsert"]) };
+  const consumer = install({}, manifest(["crm"], []));
+  const provider = install({ id: InstallId.make("provider") }, manifest([], ["upsert"]));
   const failure = (result: Result.Result<unknown, { _tag: string }>) => Result.isFailure(result) && result.failure._tag;
 
   it("binds a declared port to an action of the same tenant", () => {
@@ -83,7 +85,7 @@ describe("checkBinding", () => {
   });
 
   it("refuses undeclared ports, other tenants and missing actions", () => {
-    const foreign = { ...provider, install: install({ id: InstallId.make("provider"), tenantId: TenantId.make("globex") }) };
+    const foreign = { ...provider, tenantId: TenantId.make("globex") };
     expect(failure(checkBinding(consumer, "mail", provider, "upsert"))).toBe("PortNotDeclared");
     expect(failure(checkBinding(consumer, "crm", foreign, "upsert"))).toBe("ForeignInstall");
     expect(failure(checkBinding(consumer, "crm", provider, "delete"))).toBe("ActionNotProvided");

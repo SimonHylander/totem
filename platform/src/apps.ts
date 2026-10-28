@@ -1,9 +1,10 @@
-import { AppId, CallId, InstallId, type TenantId } from "@totem/ids";
+import { AppId, CallId, InstallId, VersionId, type TenantId } from "@totem/ids";
 import {
   HookSucceeded,
   Pending,
   checkBinding,
   declaresPort,
+  providesAction,
   requireActive,
   transition,
   withBinding,
@@ -22,7 +23,8 @@ import {
   type Manifest,
   type TraceParent,
 } from "@totem/protocol";
-import { Clock, Effect, Result } from "effect";
+import { requireCompatible, sameJson, type AppVersion } from "@totem/versions";
+import { Clock, DateTime, Effect, Result } from "effect";
 import { FetchHttpClient } from "effect/http";
 import type { Authorized } from "@totem/permissions";
 import type { InstallAction } from "./access.js";
@@ -48,7 +50,7 @@ export const registerApp = Effect.fnUntraced(function* (_: Authorized<{ type: "a
     id: AppId.make(crypto.randomUUID()),
     url,
     secret: new Sealed(secret),
-    manifest: null,
+    latest: null,
     visibility: "internal",
     oauthBindings: new Map(),
   };
@@ -56,7 +58,10 @@ export const registerApp = Effect.fnUntraced(function* (_: Authorized<{ type: "a
   return { appId: app.id, secret };
 });
 
-/** Pull the manifest through `initialize` (ADR 0007). Calling it again re-pulls. */
+/**
+ * Pull the manifest through `initialize` (ADR 0007). A manifest that differs from the latest version
+ * becomes a new version. Existing installs keep theirs until they upgrade (ADR 0017).
+ */
 export const initializeApp = Effect.fnUntraced(function* (_: Authorized<{ type: "app.register" }>, appId: AppId) {
   const { apps } = yield* Store;
   const platformUrl = (yield* PlatformConfig).baseUrl + PLATFORM_METHODS_PATH;
@@ -65,7 +70,8 @@ export const initializeApp = Effect.fnUntraced(function* (_: Authorized<{ type: 
     platformUrl,
   }));
   yield* checkEndpoints(manifest);
-  yield* apps.update(appId, (app) => ({ ...app, manifest }));
+  const version: AppVersion = { id: VersionId.make(crypto.randomUUID()), appId, manifest, pulledAt: yield* DateTime.now };
+  yield* apps.update(appId, (app) => (app.latest && sameJson(app.latest.manifest, manifest) ? app : { ...app, latest: version }));
   return manifest;
 });
 
@@ -87,9 +93,9 @@ export const createInstall = Effect.fnUntraced(function* (
 ) {
   const store = yield* Store;
   const app = yield* store.apps.get(appId);
-  if (!app.manifest) return yield* new Conflict({ message: `app ${appId} has no manifest yet. Initialize it first.` });
+  if (!app.latest) return yield* new Conflict({ message: `app ${appId} has no manifest yet. Initialize it first.` });
 
-  const unbound = newInstall(tenantId, appId, config);
+  const unbound = newInstall(tenantId, app.latest, config);
   const checked = new Map<string, PortBinding>();
   for (const [port, binding] of Object.entries(bindings)) checked.set(port, yield* bindingFor(unbound, port, binding));
   const install: Install = { ...unbound, bindings: checked };
@@ -97,12 +103,13 @@ export const createInstall = Effect.fnUntraced(function* (
   return yield* runInstallHook(app, install);
 });
 
-/** A Pending install with no bindings, connections or state, not yet stored. */
-export function newInstall(tenantId: TenantId, appId: AppId, config: Record<string, unknown>): Install {
+/** A Pending install of `version` with no bindings, connections or state, not yet stored. */
+export function newInstall(tenantId: TenantId, version: AppVersion, config: Record<string, unknown>): Install {
   return {
     id: InstallId.make(crypto.randomUUID()),
     tenantId,
-    appId,
+    appId: version.appId,
+    version,
     status: Pending.make({}),
     config,
     bindings: new Map(),
@@ -145,6 +152,22 @@ export const setBinding = Effect.fnUntraced(function* (
   yield* (yield* Store).installs.update(install.id, (current) => withBinding(current, port, checked));
 });
 
+/**
+ * Move an install to its app's latest version if the change is compatible (ADR 0017). Returns the
+ * version the install runs afterwards.
+ */
+export const upgradeInstall = Effect.fnUntraced(function* ({ action: { install } }: Authorized<InstallAction<"install.upgrade">>) {
+  const { apps, installs } = yield* Store;
+  const latest = (yield* apps.get(install.appId)).latest ?? install.version;
+  // Compared with the stored version inside the write, so a concurrent upgrade cannot be skipped over.
+  const upgraded = yield* installs.modify(install.id, (current) => {
+    if (current.version.id === latest.id) return [Result.succeed(latest), current] as const;
+    const compatible = Result.map(requireCompatible(current.version.manifest, latest.manifest), () => latest);
+    return [compatible, Result.isSuccess(compatible) ? { ...current, version: latest } : current] as const;
+  });
+  return yield* Effect.fromResult(upgraded);
+});
+
 /** Run one action and return its output. App failures surface as AppFailed. */
 export const invokeAction = Effect.fnUntraced(function* (
   { action: { install } }: Authorized<InstallAction<"install.invoke">>,
@@ -161,7 +184,7 @@ export const invokeAction = Effect.fnUntraced(function* (
 export const forwardPortCall = Effect.fnUntraced(function* (claims: CallbackClaims, port: string, input: unknown) {
   const { installs } = yield* Store;
   const install = yield* installs.get(claims.installId);
-  yield* Effect.fromResult(declaresPort(yield* manifestOf(install), port));
+  yield* Effect.fromResult(declaresPort(install.version.manifest, port));
   const binding = install.bindings.get(port);
   const provider = binding && (yield* installs.lookup(binding.installId));
   if (!binding || provider?.tenantId !== install.tenantId) {
@@ -183,6 +206,8 @@ export const runAction = Effect.fnUntraced(function* (
   input: unknown,
   depth: number,
 ) {
+  // The app's endpoint serves its newest code, so an action the pinned version lacks stops here (ADR 0017).
+  yield* Effect.fromResult(providesAction(install.version.manifest, action, `install ${install.id}`));
   const callId = CallId.make(crypto.randomUUID());
   const { apps, callbackKey } = yield* Store;
   const now = yield* Clock.currentTimeMillis;
@@ -199,21 +224,10 @@ export const runAction = Effect.fnUntraced(function* (
 /** Load the provider a binding names and run the ADR 0013 checks on it. */
 const bindingFor = Effect.fnUntraced(function* (install: Install, port: string, binding: PortBinding) {
   // An undeclared port fails before a missing provider does.
-  yield* Effect.fromResult(declaresPort(yield* manifestOf(install), port));
+  yield* Effect.fromResult(declaresPort(install.version.manifest, port));
   const provider = yield* (yield* Store).installs.get(binding.installId);
-  return yield* Effect.fromResult(
-    checkBinding(
-      { install, manifest: yield* manifestOf(install) },
-      port,
-      { install: provider, manifest: yield* manifestOf(provider) },
-      binding.action,
-    ),
-  );
+  return yield* Effect.fromResult(checkBinding(install, port, provider, binding.action));
 });
-
-/** The manifest of an installed app. Installs only exist for initialized apps. */
-export const manifestOf = (install: Install) =>
-  Store.use(({ apps }) => Effect.map(apps.get(install.appId), (app) => app.manifest!));
 
 const attributesOf = (install: Install) => ({
   "totem.tenant_id": install.tenantId,

@@ -5,7 +5,6 @@ import { DateTime, Deferred, Effect, Option, Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { authorize, type Authorized } from "@totem/permissions";
 import type { InstallAction, Session } from "./access.js";
-import { manifestOf } from "./apps.js";
 import type { CallbackClaims } from "./callback-token.js";
 import { BadRequest, Conflict, CredentialMissing, Forbidden, NotDeclared, NotFound, ProviderFailed } from "./errors.js";
 import {
@@ -46,7 +45,7 @@ export const setOAuthClient = Effect.fnUntraced(function* (
 ) {
   const { apps } = yield* Store;
   const app = yield* apps.get(appId);
-  const need = app.manifest?.needs.credentials?.[name];
+  const need = app.latest?.manifest.needs.credentials?.[name];
   if (need?.type !== "oauth2") return yield* new NotFound({ message: `no oauth2 credential ${name}` });
 
   const { authorizeUrl, tokenUrl, scopes } = need;
@@ -153,7 +152,7 @@ export const finishOAuthConnect = Effect.fnUntraced(function* (
 export const credentialStatus = Effect.fnUntraced(function* (install: Install) {
   const { oauthBindings } = yield* (yield* Store).apps.get(install.appId);
   const status: Record<string, CredentialStatus> = {};
-  for (const [name, need] of Object.entries((yield* manifestOf(install)).needs.credentials ?? {})) {
+  for (const [name, need] of Object.entries(install.version.manifest.needs.credentials ?? {})) {
     const connection = install.connections.get(name);
     const connected =
       connection?.type === "oauth2" ? connection.binding === oauthBindings.get(name) : connection?.type === need.type;
@@ -168,7 +167,7 @@ export const connectApiKey = Effect.fnUntraced(function* (
   name: string,
   key: string,
 ) {
-  if ((yield* manifestOf(install)).needs.credentials?.[name]?.type !== "apiKey") {
+  if (install.version.manifest.needs.credentials?.[name]?.type !== "apiKey") {
     return yield* new NotFound({ message: `no apiKey credential ${name}` });
   }
   yield* setConnection(install.id, name, { type: "apiKey", key: new Sealed(key) });
@@ -186,7 +185,7 @@ const setConnection = (installId: InstallId, name: string, connection: Connectio
 export const getCredential = Effect.fnUntraced(function* (claims: CallbackClaims, name: string) {
   const { apps, installs } = yield* Store;
   const install = yield* installs.get(claims.installId);
-  const need = (yield* manifestOf(install)).needs.credentials?.[name];
+  const need = install.version.manifest.needs.credentials?.[name];
   if (!need) return yield* new NotDeclared({ message: `credential "${name}" is not declared in the manifest` });
 
   const missing = new CredentialMissing({ message: `credential "${name}" is not connected` });
@@ -254,7 +253,7 @@ const refreshOnce = Effect.fnUntraced(function* (
 
 /** The current binding for an oauth2 credential, checked against the manifest's endpoints. */
 const oauthBinding = Effect.fnUntraced(function* (install: Install, name: string) {
-  const need = (yield* manifestOf(install)).needs.credentials?.[name];
+  const need = install.version.manifest.needs.credentials?.[name];
   if (need?.type !== "oauth2") return yield* new NotFound({ message: `no oauth2 credential ${name}` });
   const binding = (yield* (yield* Store).apps.get(install.appId)).oauthBindings.get(name);
   if (!binding) return yield* new Conflict({ message: `no OAuth client set for ${name}. An operator must set one.` });

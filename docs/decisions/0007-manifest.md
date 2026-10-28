@@ -1,6 +1,6 @@
 # 0007: The manifest
 
-Status: Accepted (2026-09-26)
+Status: Accepted (2026-09-26). The re-pull consequence is amended by [0017](0017-versioned-manifests.md).
 
 ## Context
 

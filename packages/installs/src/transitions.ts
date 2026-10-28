@@ -35,22 +35,23 @@ export const providesAction = (manifest: Manifest, action: string, name: string)
     : Result.fail(new ActionNotProvided({ message: `${name} does not provide ${action}` }));
 
 /**
- * The three ADR 0013 checks for binding `port` of `consumer` to `action` on `provider`: the consumer
- * declares the port, the provider is in the same tenant, and the provider's app provides the action.
+ * The three ADR 0013 checks for binding `port` of `consumer` to `action` on `provider`, each against
+ * its pinned version: the consumer declares the port, the provider is in the same tenant, and the
+ * provider's version provides the action.
  */
 export const checkBinding = (
-  consumer: { install: InstallCore; manifest: Manifest },
+  consumer: InstallCore,
   port: string,
-  provider: { install: InstallCore; manifest: Manifest },
+  provider: InstallCore,
   action: string,
 ): Result.Result<PortBinding, PortNotDeclared | ForeignInstall | ActionNotProvided> =>
   Result.gen(function* () {
-    yield* declaresPort(consumer.manifest, port);
-    if (provider.install.tenantId !== consumer.install.tenantId) {
-      return yield* Result.fail(new ForeignInstall({ message: `install ${provider.install.id} belongs to another tenant` }));
+    yield* declaresPort(consumer.version.manifest, port);
+    if (provider.tenantId !== consumer.tenantId) {
+      return yield* Result.fail(new ForeignInstall({ message: `install ${provider.id} belongs to another tenant` }));
     }
-    yield* providesAction(provider.manifest, action, `install ${provider.install.id}`);
-    return { installId: provider.install.id, action };
+    yield* providesAction(provider.version.manifest, action, `install ${provider.id}`);
+    return { installId: provider.id, action };
   });
 
 /** `install` with `port` bound to `binding`, or unbound when `binding` is undefined. */
