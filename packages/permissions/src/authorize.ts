@@ -44,6 +44,7 @@ export function can({ role }: Principal, action: ManagementAction): boolean {
     case "install.connect":
     case "install.bind":
     case "install.invoke":
+    case "install.upgrade":
       return action.install.tenantId === role.tenantId;
   }
 }

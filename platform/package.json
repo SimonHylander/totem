@@ -21,6 +21,7 @@
     "@totem/installs": "workspace:*",
     "@totem/permissions": "workspace:*",
     "@totem/protocol": "workspace:*",
+    "@totem/versions": "workspace:*",
     "effect": "^4.0.6"
   },
   "devDependencies": {

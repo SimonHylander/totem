@@ -11,6 +11,7 @@ import {
   registerApp,
   setBinding,
   setVisibility,
+  upgradeInstall,
 } from "./apps.js";
 import { browserRoute, errorPage, handleBrowser } from "./browser.js";
 import { connectApiKey, setOAuthClient } from "./connections.js";
@@ -141,6 +142,17 @@ const routes: Route[] = [
   ),
   route(
     "POST",
+    "/api/installs/:installId/upgrade",
+    Schema.Struct({ installId: InstallId }),
+    Schema.Unknown,
+    (principal, { installId }) =>
+      authorizeInstall(principal, installId, "install.upgrade").pipe(
+        Effect.flatMap(upgradeInstall),
+        Effect.map((version) => ({ versionId: version.id, version: version.manifest.version })),
+      ),
+  ),
+  route(
+    "POST",
     "/api/installs/:installId/actions/:action",
     Schema.Struct({ installId: InstallId, action: NonEmpty }),
     Schema.Struct({ input: Schema.optionalKey(Schema.Unknown) }),
@@ -165,6 +177,7 @@ const STATUS: { [K in PlatformError["_tag"]]: number } = {
   ForeignInstall: 403,
   InstallNotActive: 409,
   IllegalTransition: 409,
+  IncompatibleVersion: 409,
   PortUnbound: 422,
   CallDepthExceeded: 422,
   CredentialMissing: 422,

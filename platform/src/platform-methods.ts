@@ -16,7 +16,7 @@ import { requireActive } from "@totem/installs";
 import { Clock, Effect, Schema, Tracer } from "effect";
 import type { HttpClient } from "effect/http";
 import { bearerToken } from "./access.js";
-import { forwardPortCall, manifestOf, runAction } from "./apps.js";
+import { forwardPortCall, runAction } from "./apps.js";
 import { verifyCallbackToken, type CallbackClaims } from "./callback-token.js";
 import { bindPort, connectPort, listApps, listPorts, unbindPort } from "./catalog.js";
 import { getCredential } from "./connections.js";
@@ -67,7 +67,7 @@ const methods: Methods = {
 /** The calling install, if its manifest declares state. */
 const statefulInstall = Effect.fnUntraced(function* (claims: CallbackClaims) {
   const install = yield* (yield* Store).installs.get(claims.installId);
-  if ((yield* manifestOf(install)).needs.state !== true) {
+  if (install.version.manifest.needs.state !== true) {
     return yield* new NotDeclared({ message: "state is not declared in the manifest" });
   }
   return install;
@@ -229,6 +229,7 @@ const RPC_CODES: { [K in Exclude<PlatformError["_tag"], "AppFailed">]: number } 
   ForeignInstall: ErrorCode.Unauthorized,
   InstallNotActive: ErrorCode.InvalidRequest,
   IllegalTransition: ErrorCode.InvalidRequest,
+  IncompatibleVersion: ErrorCode.InvalidRequest,
   PortUnbound: ErrorCode.PortUnbound,
   CallDepthExceeded: ErrorCode.InvalidRequest,
   CredentialMissing: ErrorCode.CredentialMissing,

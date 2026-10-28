@@ -1,6 +1,7 @@
 import type { AppId, InstallId } from "@totem/ids";
 import type { InstallCore } from "@totem/installs";
-import type { Endpoint, Manifest } from "@totem/protocol";
+import type { Endpoint } from "@totem/protocol";
+import type { AppVersion } from "@totem/versions";
 import { Context, type DateTime, type Deferred, Effect, Layer, Ref } from "effect";
 import type { Principal } from "@totem/permissions";
 import type { Session } from "./access.js";
@@ -44,8 +45,8 @@ export type AppRecord = {
   readonly url: string;
   /** ADR 0008 platform-to-app signing key, issued at registration. */
   readonly secret: Sealed;
-  /** Null until `initialize` has pulled it. */
-  readonly manifest: Manifest | null;
+  /** The version new installs get. Null until `initialize` has pulled a manifest (ADR 0017). */
+  readonly latest: AppVersion | null;
   /** Set by an operator. `apps/list` shows only public apps, and `ports/bind` binds only to them (ADR 0015). */
   readonly visibility: Visibility;
   /** The current OAuth client by credential name. No management endpoint returns these. */

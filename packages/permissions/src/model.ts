@@ -15,7 +15,7 @@ export const Principal = Schema.Struct({ id: Schema.String, role: Role });
 export type Principal = typeof Principal.Type;
 
 /** Actions on one stored install. */
-export type InstallActionType = "install.connect" | "install.bind" | "install.invoke";
+export type InstallActionType = "install.connect" | "install.bind" | "install.invoke" | "install.upgrade";
 
 /**
  * Every management action. Install-scoped actions carry the stored install, so the tenant that

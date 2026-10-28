@@ -1,4 +1,5 @@
 import type { AppId, InstallId, TenantId } from "@totem/ids";
+import type { AppVersion } from "@totem/versions";
 import { Schema } from "effect";
 
 // An install's lifecycle and its port bindings. The platform stores installs with more fields
@@ -28,6 +29,8 @@ export type InstallCore = {
   readonly id: InstallId;
   readonly tenantId: TenantId;
   readonly appId: AppId;
+  /** The app version this install runs (ADR 0017). Calls and checks read its manifest. */
+  readonly version: AppVersion;
   readonly status: InstallStatus;
   /** By port name. A declared port with no entry is unbound. */
   readonly bindings: ReadonlyMap<string, PortBinding>;

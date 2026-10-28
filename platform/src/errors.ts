@@ -1,5 +1,6 @@
 import type { ActionNotProvided, ForeignInstall, IllegalTransition, InstallNotActive, PortNotDeclared } from "@totem/installs";
 import type { Forbidden } from "@totem/permissions";
+import type { IncompatibleVersion } from "@totem/versions";
 import { Schema } from "effect";
 
 // Domain failures. Operations fail with these and never name a wire format. The HTTP shell maps
@@ -66,6 +67,7 @@ export type PlatformError =
   | ForeignInstall
   | InstallNotActive
   | IllegalTransition
+  | IncompatibleVersion
   | PortUnbound
   | CallDepthExceeded
   | CredentialMissing

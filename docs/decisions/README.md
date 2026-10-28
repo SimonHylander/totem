@@ -20,3 +20,4 @@ One file per decision. Status is `Accepted`, `Proposed` or `Superseded`. To chan
 | [0014](0014-apps-start-their-own-actions.md) | Apps can start their own actions through `actions/start`, signed with their HMAC secret | Accepted |
 | [0015](0015-apps-manage-their-ports.md) | Apps list public apps and bind, unbind and connect their own ports through signed methods | Accepted |
 | [0016](0016-trace-metadata.md) | Trace metadata in the signed request, anchored by the callback token | Accepted |
+| [0017](0017-versioned-manifests.md) | Installs pin an immutable manifest version and upgrade explicitly when compatible | Proposed |
