@@ -1,8 +1,7 @@
 import { Layer } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { Otlp } from "effect/observability";
-import type { Principal } from "./access.js";
-import { createPlatform } from "./http.js";
+import { createPlatform, type PlatformOptions } from "./http.js";
 import { listen } from "./node.js";
 
 // Development server. Reads platform/.env.local (see package.json `dev`).
@@ -12,7 +11,7 @@ import { listen } from "./node.js";
 //                                still go to the console as well.
 
 const baseUrl = process.env["TOTEM_BASE_URL"] ?? "http://localhost:3000";
-const principals = JSON.parse(process.env["TOTEM_PRINCIPALS"] ?? "[]") as { token: string; principal: Principal }[];
+const principals = JSON.parse(process.env["TOTEM_PRINCIPALS"] ?? "[]") as PlatformOptions["principals"];
 if (principals.length === 0) throw new Error("TOTEM_PRINCIPALS is required");
 
 const collector = process.env["OTEL_EXPORTER_OTLP_ENDPOINT"];

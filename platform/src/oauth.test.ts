@@ -1,3 +1,4 @@
+import { AppId } from "@totem/ids";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ErrorCode } from "@totem/protocol";
 import { appClient, defineApp, type Manifest } from "@totem/sdk";
@@ -280,7 +281,7 @@ describe("ports/connect", () => {
     const own = await env.install({ other: consumer });
     const client = appClient(consumer, { secret: env.secrets.get(own.appId)!, platformUrl: `${PLATFORM}/rpc`, fetch: env.network });
     await client.bind(own.installId, "whoami", { appId: env.appId, action: "whoami" });
-    const app = await env.platform.runtime.runPromise(Store.use(({ apps }) => apps.get(own.appId)));
+    const app = await env.platform.runtime.runPromise(Store.use(({ apps }) => apps.get(AppId.make(own.appId))));
     const origin = new URL(app.url).origin;
     return { ...env, own, client, origin };
   }

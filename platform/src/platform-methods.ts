@@ -11,7 +11,8 @@ import {
   type PlatformMethods,
   type SignedPlatformMethods,
 } from "@totem/protocol";
-import { Clock, Effect, Tracer } from "effect";
+import { AppId, InstallId } from "@totem/ids";
+import { Clock, Effect, Schema, Tracer } from "effect";
 import type { HttpClient } from "effect/http";
 import { bearerToken } from "./access.js";
 import { forwardPortCall, manifestOf, runAction } from "./apps.js";
@@ -132,7 +133,7 @@ const signedMethods: SignedMethods = {
   "ports/list": (install) => Effect.map(listPorts(install), (ports) => ({ ports })),
 
   "ports/bind": Effect.fnUntraced(function* (install, params) {
-    yield* bindPort(install, yield* string(params, "port"), yield* string(params, "appId"), yield* string(params, "action"));
+    yield* bindPort(install, yield* string(params, "port"), yield* param(params, "appId", AppId), yield* string(params, "action"));
     return {};
   }),
 
@@ -161,13 +162,13 @@ const handleSigned = Effect.fnUntraced(function* (signature: string, body: strin
     return reply(parsed.id, new RpcError(ErrorCode.MethodNotFound, `"${parsed.method}" needs a callback token`));
   }
   const params: Params = isObject(parsed.params) ? parsed.params : {};
-  const installId = params["installId"];
-  if (typeof installId !== "string") {
+  const installId = Schema.decodeUnknownOption(InstallId)(params["installId"]);
+  if (installId._tag === "None") {
     return reply(parsed.id, new RpcError(ErrorCode.InvalidParams, "installId is required"));
   }
 
   const store = yield* Store;
-  const install = yield* store.installs.lookup(installId);
+  const install = yield* store.installs.lookup(installId.value);
   const app = install && (yield* store.apps.lookup(install.appId));
   const now = Math.floor((yield* Clock.currentTimeMillis) / 1000);
   if (!install || !app || !(yield* Effect.promise(() => verify(app.secret.reveal(), signature, body, { now })))) {
@@ -193,13 +194,15 @@ function isObject(value: unknown): value is Params {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** A required non-empty string param. */
-function string(params: Params, field: string): Effect.Effect<string, BadRequest> {
-  const value = params[field];
-  return typeof value === "string" && value !== ""
-    ? Effect.succeed(value)
-    : Effect.fail(new BadRequest({ message: `${field} is required` }));
+/** A required param, decoded with `schema`. */
+function param<S extends Schema.Decoder<unknown>>(params: Params, field: string, schema: S): Effect.Effect<S["Type"], BadRequest> {
+  return Schema.decodeUnknownEffect(schema)(params[field]).pipe(
+    Effect.mapError(() => new BadRequest({ message: `${field} is required` })),
+  );
 }
+
+/** A required non-empty string param. */
+const string = (params: Params, field: string) => param(params, field, Schema.NonEmptyString);
 
 function parse(body: string): JsonRpcRequest | Response {
   let parsed: unknown;

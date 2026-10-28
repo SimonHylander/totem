@@ -17,6 +17,7 @@
     "dev": "node --env-file-if-exists=.env.local --watch dist/server.js"
   },
   "dependencies": {
+    "@totem/ids": "workspace:*",
     "@totem/protocol": "workspace:*",
     "effect": "^4.0.6"
   },

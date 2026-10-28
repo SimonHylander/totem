@@ -1,3 +1,4 @@
+import type { AppId } from "@totem/ids";
 import type { BoundPort, CatalogApp } from "@totem/protocol";
 import { Effect } from "effect";
 import { manifestOf, newInstall, runInstallHook } from "./apps.js";
@@ -49,7 +50,7 @@ export const listPorts = Effect.fnUntraced(function* (caller: Install) {
  * `ports/bind`: bind a port to an action of a public app. Uses the tenant's first install of that
  * app, or creates one with empty config.
  */
-export const bindPort = Effect.fnUntraced(function* (caller: Install, port: string, appId: string, action: string) {
+export const bindPort = Effect.fnUntraced(function* (caller: Install, port: string, appId: AppId, action: string) {
   yield* declared(caller, port);
   const { apps, installs } = yield* Store;
   const app = yield* apps.lookup(appId);
