@@ -49,7 +49,7 @@ await serve(hubspot, { secret: hubspotApp.secret, port: 3002 });
 
 // The events app runs in its own process, so it gets its secret and install through the environment.
 const eventsApp = await register(`${EVENTS}/totem`);
-let vite = await startEvents({});
+const vite = await startEvents({});
 
 for (const { appId } of [hubspotApp, eventsApp]) await api(operator, "POST", `/api/apps/${appId}/initialize`);
 // Public apps appear on the events app's /integrations page (ADR 0015).
@@ -70,7 +70,7 @@ await invoke("createEvent", { name: "HubSpot workshop", capacity: 20 });
 
 // The UI serves one install, and that install exists only now.
 await stop(vite);
-vite = await startEvents({ EVENTS_INSTALL_ID: events.installId });
+await startEvents({ EVENTS_INSTALL_ID: events.installId });
 
 console.log(`
 Platform on ${PLATFORM}. HubSpot app on :3002, events app (UI and Totem endpoint) on :3003.
