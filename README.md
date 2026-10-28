@@ -36,5 +36,6 @@ SDKs live in `sdk/`. Example apps live in `examples/`.
 ## Docs
 
 - [Protocol](protocol/)
+- [Codebase contract](docs/contract.md)
 - [Decisions](docs/decisions/)
 - [Open questions](docs/open-questions.md)
