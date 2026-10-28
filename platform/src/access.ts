@@ -1,14 +1,20 @@
 import { createHash } from "node:crypto";
-import { DateTime, Effect } from "effect";
+import { TenantId } from "@totem/ids";
+import { DateTime, Effect, Schema } from "effect";
 import { Forbidden, Unauthenticated } from "./errors.js";
 import { Store, randomToken, type Install } from "./store.js";
 
 // Platform access (ADR 0011). Only the management API uses it. Apps never see a principal.
 
-export type Role = { name: "operator" } | { name: "tenantAdmin"; tenantId: string };
+export const Role = Schema.Union([
+  Schema.Struct({ name: Schema.Literal("operator") }),
+  Schema.Struct({ name: Schema.Literal("tenantAdmin"), tenantId: TenantId }),
+]);
+export type Role = typeof Role.Type;
 
-/** The holder of a management token: a person or a CI job. `id` names it in logs. */
-export type Principal = { id: string; role: Role };
+/** The holder of a management token: a person or a CI job. `id` names it in logs. Operators configure principals, so they are decoded at startup. */
+export const Principal = Schema.Struct({ id: Schema.String, role: Role });
+export type Principal = typeof Principal.Type;
 
 /**
  * Every management action. Install-scoped actions carry the stored install, so the tenant that
@@ -18,7 +24,7 @@ export type ManagementAction =
   | { type: "app.register" }
   | { type: "app.setOAuthClient" }
   | { type: "app.setVisibility" }
-  | { type: "install.create"; tenantId: string }
+  | { type: "install.create"; tenantId: TenantId }
   | { type: "install.connect"; install: Install }
   | { type: "install.bind"; install: Install }
   | { type: "install.invoke"; install: Install };

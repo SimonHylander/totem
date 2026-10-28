@@ -1,3 +1,4 @@
+import { AppId, CallId, InstallId, type TenantId } from "@totem/ids";
 import {
   ErrorCode,
   PROTOCOL_VERSION,
@@ -52,7 +53,7 @@ export const registerApp = Effect.fnUntraced(function* (principal: Principal, ur
   yield* authorize(principal, { type: "app.register" });
   const secret = randomToken();
   const app: AppRecord = {
-    id: crypto.randomUUID(),
+    id: AppId.make(crypto.randomUUID()),
     url,
     secret: new Sealed(secret),
     manifest: null,
@@ -64,7 +65,7 @@ export const registerApp = Effect.fnUntraced(function* (principal: Principal, ur
 });
 
 /** Pull the manifest through `initialize` (ADR 0007). Calling it again re-pulls. */
-export const initializeApp = Effect.fnUntraced(function* (principal: Principal, appId: string) {
+export const initializeApp = Effect.fnUntraced(function* (principal: Principal, appId: AppId) {
   yield* authorize(principal, { type: "app.register" });
   const { apps } = yield* Store;
   const platformUrl = (yield* PlatformConfig).baseUrl + PLATFORM_METHODS_PATH;
@@ -78,7 +79,7 @@ export const initializeApp = Effect.fnUntraced(function* (principal: Principal, 
 });
 
 /** Make an app public or internal (ADR 0015). New apps start internal. */
-export const setVisibility = Effect.fnUntraced(function* (principal: Principal, appId: string, visibility: Visibility) {
+export const setVisibility = Effect.fnUntraced(function* (principal: Principal, appId: AppId, visibility: Visibility) {
   yield* authorize(principal, { type: "app.setVisibility" });
   yield* (yield* Store).apps.update(appId, (app) => ({ ...app, visibility }));
 });
@@ -86,8 +87,8 @@ export const setVisibility = Effect.fnUntraced(function* (principal: Principal, 
 /** Install an app for a tenant, bind its ports and run its optional `install` hook. */
 export const createInstall = Effect.fnUntraced(function* (
   principal: Principal,
-  tenantId: string,
-  appId: string,
+  tenantId: TenantId,
+  appId: AppId,
   config: Record<string, unknown>,
   bindings: Record<string, PortBinding>,
 ) {
@@ -106,9 +107,9 @@ export const createInstall = Effect.fnUntraced(function* (
 });
 
 /** An install with no bindings, connections or state, not yet stored. */
-export function newInstall(tenantId: string, appId: string, config: Record<string, unknown>): Install {
+export function newInstall(tenantId: TenantId, appId: AppId, config: Record<string, unknown>): Install {
   return {
-    id: crypto.randomUUID(),
+    id: InstallId.make(crypto.randomUUID()),
     tenantId,
     appId,
     config,
@@ -137,7 +138,7 @@ export const runInstallHook = Effect.fnUntraced(function* (app: AppRecord, insta
 /** Set or replace one port binding on an existing install. */
 export const setBinding = Effect.fnUntraced(function* (
   principal: Principal,
-  installId: string,
+  installId: InstallId,
   port: string,
   binding: PortBinding,
 ) {
@@ -151,7 +152,7 @@ export const setBinding = Effect.fnUntraced(function* (
 /** Run one action and return its output. App failures surface as AppFailed. */
 export const invokeAction = Effect.fnUntraced(function* (
   principal: Principal,
-  installId: string,
+  installId: InstallId,
   action: string,
   input: unknown,
 ) {
@@ -186,7 +187,7 @@ export const forwardPortCall = Effect.fnUntraced(function* (claims: CallbackClai
  * port calls that led here (ADR 0013). The app answers ActionNotFound for actions it does not provide.
  */
 export const runAction = Effect.fnUntraced(function* (install: Install, action: string, input: unknown, depth: number) {
-  const callId = crypto.randomUUID();
+  const callId = CallId.make(crypto.randomUUID());
   const { apps, callbackKey } = yield* Store;
   const now = yield* Clock.currentTimeMillis;
   const attributes = { ...attributesOf(install), "totem.call_id": callId, "totem.action": action, "totem.depth": depth };

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { AppId, InstallId } from "@totem/ids";
 import type { CredentialStatus, CredentialValue } from "@totem/protocol";
 import { DateTime, Deferred, Effect, Option, Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
@@ -38,7 +39,7 @@ export const redirectUriFor = (bindingId: string) =>
  */
 export const setOAuthClient = Effect.fnUntraced(function* (
   principal: Principal,
-  appId: string,
+  appId: AppId,
   name: string,
   client: { clientId: string; clientSecret: string },
 ) {
@@ -68,7 +69,7 @@ export const setOAuthClient = Effect.fnUntraced(function* (
  * Start an OAuth connect from a signed-in browser. Returns the provider URL to redirect to. The
  * current connection, if any, keeps working until the new one is stored.
  */
-export const beginOAuthConnect = Effect.fnUntraced(function* (session: Session, installId: string, name: string) {
+export const beginOAuthConnect = Effect.fnUntraced(function* (session: Session, installId: InstallId, name: string) {
   const install = yield* (yield* Store).installs.get(installId);
   yield* authorize(session.principal, { type: "install.connect", install });
   return yield* startOAuthConnect(install, name, { sessionId: session.id, returnTo: null });
@@ -162,7 +163,7 @@ export const credentialStatus = Effect.fnUntraced(function* (install: Install) {
 /** Store the API key a tenant admin entered. Idempotent. */
 export const connectApiKey = Effect.fnUntraced(function* (
   principal: Principal,
-  installId: string,
+  installId: InstallId,
   name: string,
   key: string,
 ) {
@@ -174,7 +175,7 @@ export const connectApiKey = Effect.fnUntraced(function* (
   yield* setConnection(installId, name, { type: "apiKey", key: new Sealed(key) });
 });
 
-const setConnection = (installId: string, name: string, connection: Connection) =>
+const setConnection = (installId: InstallId, name: string, connection: Connection) =>
   Store.use(({ installs }) =>
     installs.update(installId, (install) => ({ ...install, connections: withEntry(install.connections, name, connection) })),
   );
