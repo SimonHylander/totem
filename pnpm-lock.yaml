@@ -124,8 +124,6 @@ importers:
 
   packages/permissions: {}
 
-  packages/publish: {}
-
   packages/runtime: {}
 
   packages/versions: {}
