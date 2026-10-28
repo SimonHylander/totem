@@ -110,7 +110,6 @@ export type PendingConnect = {
 
 /** An install as the platform stores it: the lifecycle and bindings of `@totem/installs`, plus its config, credentials and state. */
 export type Install = InstallCore & {
-  readonly config: Readonly<Record<string, unknown>>;
   /** By credential name. Deleting the install deletes them. */
   readonly connections: ReadonlyMap<string, Connection>;
   /** Install-scoped key-value state for apps that declare `needs.state`. */

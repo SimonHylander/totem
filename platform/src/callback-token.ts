@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { CallId, InstallId } from "@totem/ids";
 import { formatTrace, parseTrace, type TraceParent } from "@totem/protocol";
+import { CallDepth } from "@totem/runtime";
 import { Option, Schema } from "effect";
 import type { Sealed } from "./store.js";
 
@@ -12,7 +13,7 @@ export type CallbackClaims = {
   /** Null for the install-scoped token that `install` and `uninstall` hooks receive. */
   callId: CallId | null;
   /** How many port calls led here. Zero for calls the platform starts (ADR 0013). */
-  depth: number;
+  depth: CallDepth;
   /** The platform span that made the call. Callbacks are its children (ADR 0016). */
   trace: TraceParent | undefined;
 };
@@ -24,7 +25,7 @@ const Payload = Schema.fromJsonString(
   Schema.Struct({
     installId: InstallId,
     callId: Schema.NullOr(CallId),
-    depth: Schema.Int,
+    depth: CallDepth,
     exp: Schema.Number,
     trace: Schema.optionalKey(Schema.Unknown),
   }),

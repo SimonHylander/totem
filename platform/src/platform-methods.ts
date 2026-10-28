@@ -12,11 +12,11 @@ import {
   type SignedPlatformMethods,
 } from "@totem/protocol";
 import { AppId, InstallId } from "@totem/ids";
-import { requireActive } from "@totem/installs";
+import { requireActive, type InstallRepo } from "@totem/installs";
 import { Clock, Effect, Schema, Tracer } from "effect";
 import type { HttpClient } from "effect/http";
 import { bearerToken } from "./access.js";
-import { forwardPortCall, runAction } from "./apps.js";
+import { CallDepth, forward, invoke, type AppTransport } from "@totem/runtime";
 import { verifyCallbackToken, type CallbackClaims } from "./callback-token.js";
 import { bindPort, connectPort, listApps, listPorts, unbindPort } from "./catalog.js";
 import { getCredential } from "./connections.js";
@@ -27,7 +27,7 @@ import { Store, withEntry, type Install, type PlatformConfig } from "./store.js"
 // Signed methods are the exception: the app signs them with its HMAC secret and names one of its
 // installs (ADR 0014, ADR 0015).
 
-type Services = Store | PlatformConfig | HttpClient.HttpClient;
+type Services = Store | PlatformConfig | HttpClient.HttpClient | AppTransport | InstallRepo;
 
 type Methods = {
   [K in keyof PlatformMethods]: (
@@ -60,8 +60,10 @@ const methods: Methods = {
       Effect.as({}),
     ),
 
-  "actions/invoke": (claims, { port, input }) =>
-    Effect.map(forwardPortCall(claims, port, input), (output) => ({ output })),
+  "actions/invoke": Effect.fnUntraced(function* (claims, { port, input }) {
+    const caller = yield* (yield* Store).installs.get(claims.installId);
+    return { output: yield* forward(caller, port, input, claims.depth) };
+  }),
 };
 
 /** The calling install, if its manifest declares state. */
@@ -127,7 +129,8 @@ const signedMethods: SignedMethods = {
   "actions/start": Effect.fnUntraced(function* (install, params) {
     if (!("input" in params)) return yield* new BadRequest({ message: "input is required" });
     const action = yield* string(params, "action");
-    return { output: yield* runAction(yield* Effect.fromResult(requireActive(install)), action, params["input"], 0) };
+    const active = yield* Effect.fromResult(requireActive(install));
+    return { output: yield* invoke(active, action, params["input"], CallDepth.make(0)) };
   }),
 
   "apps/list": (install) => Effect.map(listApps(install), (apps) => ({ apps })),

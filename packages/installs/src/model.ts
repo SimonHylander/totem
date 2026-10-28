@@ -3,7 +3,7 @@ import type { AppVersion } from "@totem/versions";
 import { Schema } from "effect";
 
 // An install's lifecycle and its port bindings. The platform stores installs with more fields
-// (config, connections, app state). Every function here takes any record with the core fields.
+// (connections, app state). Every function here takes any record with the core fields.
 
 /**
  * Where an install is in its lifecycle. A new install is Pending while its `install` hook runs, and
@@ -32,6 +32,8 @@ export type InstallCore = {
   /** The app version this install runs (ADR 0017). Calls and checks read its manifest. */
   readonly version: AppVersion;
   readonly status: InstallStatus;
+  /** Per-install settings, validated against the manifest's `config` schema and sent in every call context. */
+  readonly config: Readonly<Record<string, unknown>>;
   /** By port name. A declared port with no entry is unbound. */
   readonly bindings: ReadonlyMap<string, PortBinding>;
 };
