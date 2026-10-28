@@ -24,13 +24,13 @@ export const requireActive = <I extends InstallCore>(install: I): Result.Result<
 
 /** OK if `manifest` declares `port` in `needs.actions`. */
 export const declaresPort = (manifest: Manifest, port: string): Result.Result<void, PortNotDeclared> =>
-  port in (manifest.needs.actions ?? {})
+  Object.hasOwn(manifest.needs.actions ?? {}, port)
     ? Result.succeed(undefined)
     : Result.fail(new PortNotDeclared({ message: `port "${port}" is not declared in the manifest` }));
 
 /** OK if `manifest` provides `action`. `name` says whose manifest it is in the error. */
 export const providesAction = (manifest: Manifest, action: string, name: string): Result.Result<void, ActionNotProvided> =>
-  action in (manifest.provides.actions ?? {})
+  Object.hasOwn(manifest.provides.actions ?? {}, action)
     ? Result.succeed(undefined)
     : Result.fail(new ActionNotProvided({ message: `${name} does not provide ${action}` }));
 

@@ -87,6 +87,8 @@ describe("checkBinding", () => {
     expect(failure(checkBinding(consumer, "mail", provider, "upsert"))).toBe("PortNotDeclared");
     expect(failure(checkBinding(consumer, "crm", foreign, "upsert"))).toBe("ForeignInstall");
     expect(failure(checkBinding(consumer, "crm", provider, "delete"))).toBe("ActionNotProvided");
+    expect(failure(checkBinding(consumer, "constructor", provider, "upsert"))).toBe("PortNotDeclared");
+    expect(failure(checkBinding(consumer, "crm", provider, "constructor"))).toBe("ActionNotProvided");
   });
 });
 
