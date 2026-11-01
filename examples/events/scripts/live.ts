@@ -1,14 +1,18 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { renameSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createPlatform, listen } from "@totem/platform";
 import { serve } from "@totem/sdk";
 import { app as hubspot } from "@totem/example-hubspot";
 
 // Run the platform, the hubspot app, and this events app (TanStack Start dev server) with its
 // upsertContact port bound to the HubSpot install. `pnpm live` at the repo root builds and starts
-// it. HubSpot credentials come from examples/hubspot/.env.local.
+// it. HubSpot credentials come from examples/hubspot/.env.local. When TOTEM_READY_FILE is set, it
+// writes the instance's ids there as JSON once everything is up (the verify-events skill reads it).
 
 const PLATFORM = "http://localhost:3000";
 const EVENTS = "http://localhost:3003";
+const VITE_BIN = fileURLToPath(new URL("bin/vite.js", import.meta.resolve("vite/package.json")));
 
 const clientId = process.env["HUBSPOT_CLIENT_ID"];
 const clientSecret = process.env["HUBSPOT_CLIENT_SECRET"];
@@ -95,9 +99,17 @@ Tenant acme has one events install, bound to its HubSpot install, with two event
      -H 'authorization: Bearer ${tenantAdmin}' -H 'content-type: application/json' -d '{"input":{"eventId":"${launch.eventId}"}}'
 `);
 
+const readyFile = process.env["TOTEM_READY_FILE"];
+if (readyFile) {
+  // Rename after writing, so a reader never sees a partial file.
+  const tmp = `${readyFile}.tmp`;
+  writeFileSync(tmp, JSON.stringify({ token: tenantAdmin, crmInstall: crm.installId, eventsInstall: events.installId, eventId: launch.eventId }));
+  renameSync(tmp, readyFile);
+}
+
 /** Start the events dev server with its secret plus `extra` env, and wait until it answers. */
 async function startEvents(extra: Record<string, string>) {
-  const child = spawn("vite", ["dev", "--port", "3003", "--strictPort"], {
+  const child = spawn(process.execPath, [VITE_BIN, "dev", "--port", "3003", "--strictPort"], {
     env: { ...process.env, TOTEM_APP_SECRET: eventsApp.secret, TOTEM_PLATFORM_URL: `${PLATFORM}/rpc`, ...extra },
     stdio: "inherit",
   });

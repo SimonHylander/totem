@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build the events example's dependencies, start examples/events/scripts/live.ts as a run this
-# skill owns, wait for its banner, and write the banner's ids to <run>/instance.env.
+# skill owns, wait for the ready file it writes (<run>/ready.json), and write its ids to
+# <run>/instance.env.
 # Usage: launch.sh. Prints the run directory.
 source "$(dirname "$0")/_common.sh"
 
@@ -23,15 +24,14 @@ if ! pnpm exec turbo run build --filter=@totem/example-events^... > "$run/build.
   exit 1
 fi
 
-# live.ts spawns `vite`, which pnpm normally puts on PATH.
 cd examples/events
-PATH="$PWD/node_modules/.bin:$PATH" nohup node --env-file-if-exists=../hubspot/.env.local scripts/live.ts \
+ready="$run/ready.json"
+TOTEM_READY_FILE="$ready" nohup node --env-file-if-exists=../hubspot/.env.local scripts/live.ts \
   > "$run/live.log" 2>&1 &
 echo $! > "$run/live.pid"
 
-# The banner's last line carries the event id, so it means everything is up.
 for _ in $(seq 1 120); do
-  grep -q '"eventId":"' "$run/live.log" && break
+  [[ -f $ready ]] && break
   if ! kill -0 "$(cat "$run/live.pid")" 2>/dev/null; then
     echo "live.ts exited during startup:" >&2
     tail -20 "$run/live.log" >&2
@@ -39,13 +39,9 @@ for _ in $(seq 1 120); do
   fi
   sleep 1
 done
-grep -q '"eventId":"' "$run/live.log" || { echo "no banner after 120s, see $run/live.log" >&2; exit 1; }
+[[ -f $ready ]] || { echo "live.ts not ready after 120s, see $run/live.log" >&2; exit 1; }
 
-cat > "$run/instance.env" <<EOF
-TOKEN=$(sed -n 's/^ *token: //p' "$run/live.log")
-CRM_INSTALL=$(grep -o 'installs/[^/]*/connect/hubspot' "$run/live.log" | cut -d/ -f2)
-EVENTS_INSTALL=$(grep -o 'api/installs/[^/]*/actions/listAttendees' "$run/live.log" | cut -d/ -f3)
-EOF
+jq -r '"TOKEN=\(.token)", "CRM_INSTALL=\(.crmInstall)", "EVENTS_INSTALL=\(.eventsInstall)"' "$ready" > "$run/instance.env"
 listener 3003 > "$run/vite.pid"
 
 echo "$run"
