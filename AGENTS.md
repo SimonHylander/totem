@@ -4,6 +4,8 @@ Instructions for coding agents working in this repo. `CLAUDE.md` is a symlink to
 
 Skills live in `.agents/skills/`. `.claude/skills` links to the same directory.
 
+Read [`docs/contract.md`](docs/contract.md) before adding a feature, a shared module, or a dependency between packages.
+
 ## Effect first
 
 This repo is **effect first**: write TypeScript with the Effect library. Model errors, dependencies, resources, concurrency, and data with Effect's modules (`Effect`, `Layer`, `Schema`, ...) before reaching for a plain TypeScript or third-party equivalent. Leave Effect only where a boundary demands it (framework entry points, third-party callbacks), and convert into Effect at that edge.
