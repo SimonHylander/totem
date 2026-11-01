@@ -90,7 +90,7 @@ components:
 
 **Creative North Star: "The Sign-up Sheet"**
 
-Capacity is drawn as a numbered sheet. Every seat is a line with its number in a fixed column, taken lines say so, long runs collapse into one range line, and a heavy ink rule marks where capacity ends and the waitlist begins. The attendee sees exactly which line is theirs before they act, writes their email on it, and watches their name fill that same line on submit. The number never moves.
+Capacity is drawn as a numbered sheet. Every seat is a line with its number in a fixed column, taken lines say so, long runs collapse into one range line, and a heavy ink rule marks where capacity ends and the waitlist begins. The attendee sees exactly which line is theirs before they act, watches it preview what they type in the form below, and sees their name written onto that same line on submit. The number never moves.
 
 The world is neutral on purpose. A tenant themes the whole app by overriding one token, the accent, and everything else stays white ground, a zinc ink scale and hairline rules. Density is calm: one reading-width column on every viewport, 48px lines, no decoration. The visual vocabulary is rules, numbers and weight. Depth, imagery and color fields are absent.
 
@@ -137,7 +137,7 @@ A neutral zinc scale on white, with a single tenant accent that marks only what 
 ### Hierarchy
 - **Headline** (650, clamp 1.75rem to 2.25rem, 1.1, -0.02em, balanced wrap): the page title, one per page.
 - **Title** (600, 1.0625rem): event names in the list and the result line after registering.
-- **Body** (400, 1rem, 1.5): ledes, notices, the email input, the attendee's own number (700).
+- **Body** (400, 1rem, 1.5): ledes, notices, field input text, the line preview, the attendee's own number (700).
 - **Label** (500, 0.875rem): field labels. The same size at 400 in Ink 3 carries line numbers, "taken", range lines and the sync line.
 - **Caption** (400, 0.8125rem): the capacity rule label and the sub-line under a signed name.
 
@@ -157,8 +157,7 @@ One column, `--measure` (34rem) wide, centered, with `--gutter` (20px) side padd
 The system is flat. There are no shadows, cards or layered surfaces. Structure comes from rules: 1px hairlines between rows, a strong ink rule for a boundary, a 2px accent rule under the attendee's own line. `box-shadow` appears only as a focus treatment.
 
 ### Shadow Vocabulary
-- **Field focus ring** (`box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent)`): on a focused name field, together with an accent border.
-- **Own-line focus** (`box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent) 35%, transparent)`): on the attendee's line while its email input has focus.
+- **Field focus ring** (`box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent)`): on a focused field, together with an accent border.
 
 ### Named Rules
 **The Ruled Sheet Rule.** Depth is never used to group or lift content. Hairlines separate, strong ink marks a boundary, and the accent rule marks ownership.
@@ -178,7 +177,8 @@ Full-width and direct. The one primary action on a page.
 - There is no secondary button.
 
 ### Inputs / Fields
-- **Style:** label above (0.875rem, 500) with an Ink 3 "optional" hint, 44px field, 1px Taken Grey stroke, 8px radius, white fill, 12px side padding.
+- **Order:** Email first at full column width with no hint, since it is the one required field. First and last name follow two-up with the "optional" hint.
+- **Style:** label above (0.875rem, 500), an Ink 3 "optional" hint on optional fields, 44px field, 1px Taken Grey stroke, 8px radius, white fill, 12px side padding.
 - **Hover:** stroke moves to Ink 3.
 - **Focus:** accent border plus the 3px field focus ring, no outline.
 - **Error:** a single Danger line below the button (0.9375rem). Fields do not change color.
@@ -197,7 +197,7 @@ Full-width and direct. The one primary action on a page.
 - **Line:** 48px, number column plus content, hairline below. Taken lines show the number and "taken" in Ink 3 at 0.875rem. Open lines show only the number (with a visually hidden "open").
 - **Range line:** 36px minimum, collapses a run of lines into one entry ("4–20 open", "W1–W5 taken") in the content column. Waitlist numbers carry a "W" prefix.
 - **Capacity rule:** a 2px Line Strong rule with a caption label ("Capacity 20. The waitlist starts here.") in the content column. Lines below it are the waitlist.
-- **Your line:** Accent Wash band with a 2px accent bottom rule. The number is accent, 1rem, 700 ("Next" when the waitlist position is unknown). Before submit it holds the email input, borderless and transparent, with the inset focus ring on the line. After submit the attendee's name is written onto the same line in 600 with a caption sub-line ("Your seat").
+- **Your line:** Accent Wash band with a 2px accent bottom rule. The number is accent, 1rem, 700 ("Next" when the waitlist position is unknown). Before submit it previews the form: "Your seat" ("Your place" on the waitlist) in Ink 2 at 0.875rem until the attendee types, then their name, or their email when no name is given, in Ink 2 at 1rem. The preview is one line, truncated with an ellipsis, and hidden from screen readers. After submit the attendee's name is written onto the same line in 600 with a caption sub-line ("Your seat").
 - **Write motion:** the name reveals left to right with `clip-path` over 520ms on `cubic-bezier(0.16, 1, 0.3, 1)`. Reduced motion removes it.
 
 ## Do's and Don'ts

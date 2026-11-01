@@ -7,7 +7,8 @@ import { eventsInstall, totem } from "../totem.js";
 // The public registration page for one event. Anyone with the URL can register (ADR 0014: the app
 // decides who may trigger its actions). Each submit runs the app's `register` action through the
 // platform, which syncs the attendee to the bound CRM. The page draws the event as a sign-up
-// sheet (sheet.ts): the attendee writes their email on the next free line.
+// sheet (sheet.ts): the attendee's line previews what they type in the form below it, and their
+// name is written onto it once they hold the spot.
 
 type Registration = { eventId: string; email: string; firstName?: string; lastName?: string };
 
@@ -53,6 +54,21 @@ export const Route = createFileRoute("/events/$eventId")({
 
 type Result = Awaited<ReturnType<typeof registerAttendee>>;
 
+/** The text written on the attendee's line: their name when they give one, otherwise their email. */
+function lineText({ email, firstName, lastName }: { email?: string; firstName?: string; lastName?: string }): string {
+  return [firstName, lastName].map((part) => part?.trim()).filter(Boolean).join(" ") || (email?.trim() ?? "");
+}
+
+/** Mirrors the form into the attendee's line as they type. */
+function draftOf(form: HTMLFormElement): string {
+  const data = new FormData(form);
+  const value = (name: string) => {
+    const entry = data.get(name);
+    return typeof entry === "string" ? entry : undefined;
+  };
+  return lineText({ email: value("email"), firstName: value("firstName"), lastName: value("lastName") });
+}
+
 /** What the attendee wrote on their line, shown once they hold it. */
 type Signed = { result: Result; name: string };
 
@@ -62,6 +78,7 @@ function EventPage() {
   const [signed, setSigned] = useState<Signed | null>(null);
   const [failed, setFailed] = useState(false);
   const [pending, setPending] = useState(false);
+  const [draft, setDraft] = useState("");
 
   const taken = event.capacity - event.seatsLeft;
   const spot: Spot = signed
@@ -79,8 +96,7 @@ function EventPage() {
     setFailed(false);
     try {
       const result = await registerAttendee({ data });
-      const name = [data.firstName, data.lastName].filter(Boolean).join(" ");
-      setSigned({ result, name: name || data.email });
+      setSigned({ result, name: lineText(data) });
     } catch {
       setFailed(true);
     } finally {
@@ -95,10 +111,10 @@ function EventPage() {
         {full ? `Full. All ${event.capacity} seats are taken, and the waitlist is open.` : `${event.seatsLeft} of ${event.capacity} seats open.`}
       </p>
 
-      <form onSubmit={submit} aria-describedby={failed ? "register-error" : undefined}>
+      <form onSubmit={submit} onChange={(e) => setDraft(draftOf(e.currentTarget))} aria-describedby={failed ? "register-error" : undefined}>
         <ol className="sheet" aria-label={`Sign-up sheet for ${event.name}`}>
           {rows.map((row) => (
-            <SheetRow key={rowKey(row)} row={row} signed={signed} />
+            <SheetRow key={rowKey(row)} row={row} signed={signed} draft={draft} />
           ))}
         </ol>
 
@@ -113,6 +129,10 @@ function EventPage() {
           </div>
         ) : (
           <>
+            <label className="field field-email">
+              <span>Email</span>
+              <input name="email" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} required />
+            </label>
             <div className="names">
               <label className="field">
                 <span>
@@ -155,8 +175,11 @@ function rowKey(row: Row): string {
   }
 }
 
-/** One row of the sheet. The attendee's own row holds the email input until they are signed. */
-function SheetRow({ row, signed }: { row: Row; signed: Signed | null }) {
+/**
+ * One row of the sheet. The attendee's own row previews `draft` until they are signed, then
+ * shows their name.
+ */
+function SheetRow({ row, signed, draft }: { row: Row; signed: Signed | null; draft: string }) {
   const prefix = (list: Spot["list"]) => (list === "waitlist" ? "W" : "");
   switch (row.kind) {
     case "rule":
@@ -197,13 +220,13 @@ function SheetRow({ row, signed }: { row: Row; signed: Signed | null }) {
               <span className="row-name">{signed.name}</span>
               <span className="row-sub">{row.list === "seats" ? "Your seat" : "Your place on the waitlist"}</span>
             </span>
+          ) : draft ? (
+            // Hidden from screen readers so they do not echo every keystroke from the form.
+            <span className="row-draft" aria-hidden="true">
+              {draft}
+            </span>
           ) : (
-            <>
-              <label htmlFor="email" className="visually-hidden">
-                Your email
-              </label>
-              <input id="email" name="email" type="email" autoComplete="email" placeholder="Your email" required />
-            </>
+            <span className="row-draft row-draft-empty">{row.list === "seats" ? "Your seat" : "Your place"}</span>
           )}
         </li>
       );
