@@ -6,7 +6,6 @@ const credentials = { hubspot: { type: "oauth2", accessToken: "tok", expiresAt: 
 
 type Stored = { id: string; properties: Record<string, string> };
 
-/** In-memory stand-in for the HubSpot contacts endpoints the app calls. */
 function fakeHubSpot() {
   const contacts = new Map<string, Stored>();
   const requests: { method: string; url: string; authorization: string | null }[] = [];

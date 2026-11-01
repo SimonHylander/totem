@@ -7,3 +7,4 @@ Questions that block or shape upcoming decisions. Move each one into a decision 
 - **Streaming.** SSE on the same connection is decided ([0002](decisions/0002-json-rpc-over-http.md)) but `actions/invoke` is request-response. Shape of progress events and the final result for long-running actions.
 - **Triggers.** Manifest declares them. `events/emit` and subscription are unspecified.
 - **End users in apps.** The events `/integrations` page has no login, and one deployment serves one install (see [0015](decisions/0015-apps-manage-their-ports.md)). Decide how an app signs in its users and creates a tenant install of itself for each new organization.
+- **Compare-and-set for install state.** State has none, so two calls that land at the same moment read the same value and the second write wins. In the events example an attendee can be lost and the last seat can be given twice. Decide whether state gets a version check on write.

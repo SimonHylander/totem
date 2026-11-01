@@ -4,10 +4,6 @@ import { defineApp, serve, type Manifest } from "@totem/sdk";
 import { Context, Layer, Logger, Option, Tracer } from "effect";
 import { app } from "./app.js";
 
-// The verify-totem run: boot the platform and two apps over real HTTP, drive the management API
-// through every step of an install, and check the result and the trace. Exits non-zero on the first
-// failure. `pnpm verify:live` at the repo root builds and runs it.
-
 const PLATFORM = "http://localhost:3100";
 const CONTACTS = "http://localhost:3101/";
 const ENRICHER = "http://localhost:3102/";
@@ -30,7 +26,6 @@ const enricher = defineApp(
   { actions: { enrichPerson: async ({ email }) => ({ company: email.endsWith("@acme.test") ? "Acme" : "Unknown" }) } },
 );
 
-/** What the contacts app saw on its last createContact: its config, its key and its stored state. */
 const seen: { pipeline?: string | undefined; key?: string; lastContactId?: unknown } = {};
 const contacts = defineApp(app.manifest, {
   actions: {
@@ -74,7 +69,6 @@ const platform = createPlatform(
 );
 await listen(platform.handle, PLATFORM);
 
-/** Call the management API, and stop on any failure. */
 async function api<T>(token: string, method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
   const response = await fetch(PLATFORM + path, {
     method,

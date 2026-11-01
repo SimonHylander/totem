@@ -2,11 +2,6 @@ import { AppError, defineApp, type CallCtx } from "@totem/sdk";
 import { manifest } from "./manifest.js";
 import { statusFor, type SeatStatus } from "./seats.js";
 
-// One install serves one tenant, and the tenant runs many events through it. Each event lives in
-// install state under `event:<id>`, and `events` lists the IDs oldest first. State has no
-// compare-and-set, so two calls that land at the same moment read the same event and the second
-// write wins: an attendee can be lost and the last seat can be given twice.
-
 type Attendee = {
   email: string;
   firstName?: string;
@@ -39,6 +34,10 @@ function summary({ id, name, capacity, attendees }: Event) {
   return { eventId: id, name, capacity, seatsLeft: Math.max(capacity - registered, 0) };
 }
 
+/**
+ * One install serves one tenant, and the tenant runs many events through it. Each event lives in install
+ * state under `event:<id>`, and `events` lists the IDs oldest first.
+ */
 export const app = defineApp(manifest, {
   actions: {
     createEvent: async ({ name, capacity }, ctx) => {
@@ -67,7 +66,6 @@ export const app = defineApp(manifest, {
         ...(firstName !== undefined && { firstName }),
         ...(lastName !== undefined && { lastName }),
       };
-      // The registration stands even when the CRM is down or not bound.
       let crmContactId: string | null = null;
       try {
         crmContactId = (await ctx.ports.upsertContact(person)).contactId;
@@ -114,7 +112,6 @@ function normalize(email: string): string {
   return email.trim().toLowerCase();
 }
 
-/** The attendee's status, with its 1-based position among attendees of the same status. */
 function placement(attendees: Attendee[], attendee: Attendee) {
   const position = attendees.filter((a) => a.status === attendee.status).indexOf(attendee) + 1;
   return { status: attendee.status, position, crmContactId: attendee.crmContactId };

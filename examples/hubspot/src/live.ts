@@ -2,10 +2,6 @@ import { createPlatform, listen } from "@totem/platform";
 import { serve } from "@totem/sdk";
 import { app } from "./app.js";
 
-// Run the platform and this app against your HubSpot account. `pnpm live` reads .env.local:
-//   HUBSPOT_CLIENT_ID      from the totem-test project's Auth tab
-//   HUBSPOT_CLIENT_SECRET  same place. Never commit it.
-
 const PLATFORM = "http://localhost:3000";
 const APP_PORT = 3002;
 
@@ -25,7 +21,6 @@ const platform = createPlatform({
 });
 await listen(platform.handle, PLATFORM);
 
-/** Call the management API, and stop on any failure. */
 async function api<T>(token: string, method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(PLATFORM + path, {
     method,

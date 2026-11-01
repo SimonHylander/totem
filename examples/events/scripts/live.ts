@@ -5,11 +5,6 @@ import { createPlatform, listen } from "@totem/platform";
 import { serve } from "@totem/sdk";
 import { app as hubspot } from "@totem/example-hubspot";
 
-// Run the platform, the hubspot app, and this events app (TanStack Start dev server) with its
-// upsertContact port bound to the HubSpot install. `pnpm live` at the repo root builds and starts
-// it. HubSpot credentials come from examples/hubspot/.env.local. When TOTEM_READY_FILE is set, it
-// writes the instance's ids there as JSON once everything is up (the verify-events skill reads it).
-
 const PLATFORM = "http://localhost:3000";
 const EVENTS = "http://localhost:3003";
 const VITE_BIN = fileURLToPath(new URL("bin/vite.js", import.meta.resolve("vite/package.json")));
@@ -18,8 +13,8 @@ const clientId = process.env["HUBSPOT_CLIENT_ID"];
 const clientSecret = process.env["HUBSPOT_CLIENT_SECRET"];
 if (!clientId || !clientSecret) throw new Error("set HUBSPOT_CLIENT_ID and HUBSPOT_CLIENT_SECRET in examples/hubspot/.env.local");
 
-// Exit normally on Ctrl-C or SIGTERM, so the exit handlers stop the dev servers this script started.
-for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => process.exit(130));
+const exitToStopDevServers = () => process.exit(130);
+for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, exitToStopDevServers);
 
 const operator = crypto.randomUUID();
 const tenantAdmin = crypto.randomUUID();
@@ -33,7 +28,6 @@ const platform = createPlatform({
 });
 await listen(platform.handle, PLATFORM);
 
-/** Call the management API, and stop on any failure. */
 async function api<T>(token: string, method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(PLATFORM + path, {
     method,
@@ -45,18 +39,15 @@ async function api<T>(token: string, method: string, path: string, body?: unknow
   return json as T;
 }
 
-/** Register an app URL and return its ID and HMAC secret. */
 const register = (url: string) => api<{ appId: string; secret: string }>(operator, "POST", "/api/apps", { url });
 
 const hubspotApp = await register("http://localhost:3002/");
 await serve(hubspot, { secret: hubspotApp.secret, port: 3002 });
 
-// The events app runs in its own process, so it gets its secret and install through the environment.
 const eventsApp = await register(`${EVENTS}/totem`);
 const vite = await startEvents({});
 
 for (const { appId } of [hubspotApp, eventsApp]) await api(operator, "POST", `/api/apps/${appId}/initialize`);
-// Public apps appear on the events app's /integrations page (ADR 0015).
 await api(operator, "PUT", `/api/apps/${hubspotApp.appId}/visibility`, { visibility: "public" });
 const { redirectUri } = await api<{ redirectUri: string }>(operator, "PUT", `/api/apps/${hubspotApp.appId}/oauth-clients/hubspot`, {
   clientId,
@@ -72,7 +63,6 @@ const invoke = <T>(action: string, input: unknown) =>
 const launch = await invoke<{ eventId: string }>("createEvent", { name: "Totem launch", capacity: 2 });
 await invoke("createEvent", { name: "HubSpot workshop", capacity: 20 });
 
-// The UI serves one install, and that install exists only now.
 await stop(vite);
 await startEvents({ EVENTS_INSTALL_ID: events.installId });
 
@@ -101,22 +91,26 @@ Tenant acme has one events install, bound to its HubSpot install, with two event
 
 const readyFile = process.env["TOTEM_READY_FILE"];
 if (readyFile) {
-  // Rename after writing, so a reader never sees a partial file.
-  const tmp = `${readyFile}.tmp`;
-  writeFileSync(tmp, JSON.stringify({ token: tenantAdmin, crmInstall: crm.installId, eventsInstall: events.installId, eventId: launch.eventId }));
-  renameSync(tmp, readyFile);
+  writeFileAtomically(
+    readyFile,
+    JSON.stringify({ token: tenantAdmin, crmInstall: crm.installId, eventsInstall: events.installId, eventId: launch.eventId }),
+  );
 }
 
-/** Start the events dev server with its secret plus `extra` env, and wait until it answers. */
+function writeFileAtomically(path: string, contents: string) {
+  const tmp = `${path}.tmp`;
+  writeFileSync(tmp, contents);
+  renameSync(tmp, path);
+}
+
 async function startEvents(extra: Record<string, string>) {
   const child = spawn(process.execPath, [VITE_BIN, "dev", "--port", "3003", "--strictPort"], {
     env: { ...process.env, TOTEM_APP_SECRET: eventsApp.secret, TOTEM_PLATFORM_URL: `${PLATFORM}/rpc`, ...extra },
     stdio: "inherit",
   });
   process.on("exit", () => child.kill());
-  // A dev server that exits early, for example because :3003 is taken, must not look like a start.
-  const exited = new Promise<never>((_, reject) => child.once("exit", (code) => reject(new Error(`vite exited with ${code}`))));
-  await Promise.race([waitFor(EVENTS), exited]);
+  const exitedBeforeAnswering = new Promise<never>((_, reject) => child.once("exit", (code) => reject(new Error(`vite exited with ${code}`))));
+  await Promise.race([waitFor(EVENTS), exitedBeforeAnswering]);
   return child;
 }
 
@@ -127,7 +121,6 @@ function stop(child: ChildProcess): Promise<void> {
   });
 }
 
-/** Poll a URL until it answers, for up to 30 seconds. */
 async function waitFor(url: string): Promise<void> {
   for (let attempt = 0; attempt < 60; attempt++) {
     try {

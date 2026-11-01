@@ -1,7 +1,3 @@
-// The sign-up sheet the registration page draws. An event's capacity is a list of numbered lines,
-// and the waitlist continues below them. The page never shows every line: long runs of taken or
-// open lines collapse into one range row, so an event of 500 seats draws about as many rows as one of 20.
-
 import { statusFor } from "../../totem/seats.js";
 
 /** Where the attendee's own line sits. `position` is unknown on the waitlist until they register. */
@@ -27,8 +23,10 @@ export function takenWith(taken: number, you: Spot): number {
 }
 
 /**
- * The rows to draw for an event, around the attendee's spot. `taken` counts registered seats,
- * including the attendee's own once they hold one.
+ * The rows to draw for an event, around the attendee's spot. An event's capacity is a list of numbered lines
+ * and the waitlist continues below them. Long runs of taken or open lines collapse into one range row, so an
+ * event of 500 seats draws about as many rows as one of 20. `taken` counts registered seats, including the
+ * attendee's own once they hold one.
  */
 export function sheetRows(capacity: number, taken: number, you: Spot): Row[] {
   if (you.list === "waitlist") {
@@ -50,13 +48,12 @@ export function sheetRows(capacity: number, taken: number, you: Spot): Row[] {
   ];
 }
 
-/** Lines `from` to `to`, keeping `head` and `tail` lines and collapsing the middle into a range. */
 function run(list: Spot["list"], state: "taken" | "open", from: number, to: number, head: number, tail: number): Row[] {
   const count = to - from + 1;
   if (count <= 0) return [];
   const line = (number: number): Row => ({ kind: "line", list, number, state });
-  // A range that would hide a single line is just that line.
-  if (count <= head + tail + 1) return Array.from({ length: count }, (_, i) => line(from + i));
+  const hidden = count - head - tail;
+  if (hidden <= 1) return Array.from({ length: count }, (_, i) => line(from + i));
   return [
     ...Array.from({ length: head }, (_, i) => line(from + i)),
     { kind: "range", list, from: from + head, to: to - tail, state },

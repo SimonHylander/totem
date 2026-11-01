@@ -1,8 +1,5 @@
 import { AppError } from "@totem/sdk";
 
-// Thin client for the HubSpot CRM contacts API (v3). Contacts are addressed by email through
-// `idProperty=email`, so callers never handle HubSpot record IDs on input.
-
 const BASE_URL = "https://api.hubapi.com/crm/v3/objects/contacts";
 const PROPERTIES = "email,firstname,lastname";
 
@@ -23,7 +20,11 @@ type HubSpotObject = {
   properties: { email?: string | null; firstname?: string | null; lastname?: string | null };
 };
 
-/** Bind the client to one access token. Create a new client per call, because tokens expire. */
+/**
+ * Thin client for the HubSpot CRM contacts API (v3), bound to one access token. Contacts are addressed by
+ * email through `idProperty=email`, so callers never handle HubSpot record IDs on input. Create a new client
+ * per call, because tokens expire.
+ */
 export function hubspot(accessToken: string) {
   const request = (path: string, init: RequestInit = {}) =>
     fetch(`${BASE_URL}${path}`, {

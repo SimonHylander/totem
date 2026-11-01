@@ -5,16 +5,12 @@ import { Registration, registerAttendee } from "./server.js";
 import { nextSpot, sheetRows, takenWith, type Spot } from "./sheet.js";
 import { SheetRow, rowKey, type Signed } from "./SheetRow.js";
 
-// Anyone with the URL can register. The app decides who may trigger its actions (ADR 0014).
-
 const route = getRouteApi("/events/$eventId");
 
-/** The text written on the attendee's line: their name when they give one, otherwise their email. */
 function lineText({ email, firstName, lastName }: { email?: string; firstName?: string; lastName?: string }): string {
   return [firstName, lastName].map((part) => part?.trim()).filter(Boolean).join(" ") || (email?.trim() ?? "");
 }
 
-/** Mirrors the form into the attendee's line as they type. */
 function draftOf(form: HTMLFormElement): string {
   const data = new FormData(form);
   const value = (name: string) => {
@@ -24,6 +20,7 @@ function draftOf(form: HTMLFormElement): string {
   return lineText({ email: value("email"), firstName: value("firstName"), lastName: value("lastName") });
 }
 
+/** Anyone with the URL can register. The app decides who may trigger its actions (ADR 0014). */
 export function RegistrationPage() {
   const event = route.useLoaderData();
   const { eventId } = route.useParams();
@@ -99,7 +96,7 @@ export function RegistrationPage() {
                 <input name="lastName" autoComplete="family-name" />
               </label>
             </div>
-            {/* Before hydration a submit is a native GET that puts the attendee's email in the URL. A disabled default button also blocks Enter. */}
+            {/* quirk: before hydration a submit is a native GET that puts the email in the URL, and a disabled default button also blocks Enter. */}
             <button className="submit" disabled={pending || !hydrated}>
               {pending ? "Signing you up…" : full ? "Join the waitlist" : `Take seat ${spot.position}`}
             </button>
@@ -115,7 +112,7 @@ export function RegistrationPage() {
   );
 }
 
-// Covers an unknown event and a platform that cannot be reached alike. The server log has the cause.
+/** Covers an unknown event and a platform that cannot be reached alike. The server log has the cause. */
 export function RegistrationError() {
   return (
     <main>

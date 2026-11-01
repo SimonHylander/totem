@@ -60,7 +60,7 @@ export const manifest = {
   },
   needs: {
     credentials: {
-      // The operator's HubSpot app must also list the platform's redirect URI for this binding.
+      // quirk: HubSpot refuses the OAuth flow unless the operator's HubSpot app lists the platform's redirect URI.
       hubspot: {
         type: "oauth2",
         authorizeUrl: "https://app.hubspot.com/oauth/authorize",

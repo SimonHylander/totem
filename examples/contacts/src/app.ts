@@ -1,7 +1,6 @@
 import { defineApp } from "@totem/sdk";
 import { manifest } from "./manifest.js";
 
-// Stand-in for a CRM client. A real app would call the CRM's HTTP API here.
 async function crmCreateContact(apiKey: string, contact: { email: string; name?: string; pipeline?: string }) {
   void apiKey;
   return { id: `c_${contact.email.split("@")[0]}` };

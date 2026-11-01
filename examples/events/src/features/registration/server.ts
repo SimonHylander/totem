@@ -4,7 +4,6 @@ import { eventsInstall, totem } from "../../totem/connection.js";
 
 const Text = Schema.Trim.check(Schema.isNonEmpty());
 
-/** A blank form field means no name, so an empty string decodes to a missing key. */
 const OptionalText = Schema.optional(Schema.String).pipe(
   Schema.decodeTo(
     Schema.optionalKey(Text),
