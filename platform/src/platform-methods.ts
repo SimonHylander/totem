@@ -21,13 +21,14 @@ import { verifyCallbackToken, type CallbackClaims } from "./callback-token.js";
 import { bindPort, connectPort, listApps, listPorts, unbindPort } from "./catalog.js";
 import { getCredential } from "./connections.js";
 import { BadRequest, NotDeclared, type PlatformError } from "./errors.js";
-import { Store, withEntry, type Install, type PlatformConfig } from "./store.js";
+import { Installs, type Install } from "./installs.js";
+import { Store, type PlatformConfig } from "./store.js";
 
 // The endpoint apps call (ADR 0008). The callback token names the install, so params carry no tenant.
 // Signed methods are the exception: the app signs them with its HMAC secret and names one of its
 // installs (ADR 0014, ADR 0015).
 
-type Services = Store | PlatformConfig | HttpClient.HttpClient | AppTransport | InstallRepo;
+type Services = Store | Installs | PlatformConfig | HttpClient.HttpClient | AppTransport | InstallRepo;
 
 type Methods = {
   [K in keyof PlatformMethods]: (
@@ -46,10 +47,7 @@ const methods: Methods = {
 
   "state/set": Effect.fnUntraced(function* (claims, { key, value }) {
     yield* statefulInstall(claims);
-    yield* (yield* Store).installs.update(claims.installId, (install) => ({
-      ...install,
-      state: withEntry(install.state, key, value === null ? undefined : value),
-    }));
+    yield* (yield* Installs).setState(claims.installId, key, value);
     return {};
   }),
 
@@ -61,14 +59,14 @@ const methods: Methods = {
     ),
 
   "actions/invoke": Effect.fnUntraced(function* (claims, { port, input }) {
-    const caller = yield* (yield* Store).installs.get(claims.installId);
+    const caller = yield* (yield* Installs).get(claims.installId);
     return { output: yield* forward(caller, port, input, claims.depth) };
   }),
 };
 
 /** The calling install, if its manifest declares state. */
 const statefulInstall = Effect.fnUntraced(function* (claims: CallbackClaims) {
-  const install = yield* (yield* Store).installs.get(claims.installId);
+  const install = yield* (yield* Installs).get(claims.installId);
   if (install.version.manifest.needs.state !== true) {
     return yield* new NotDeclared({ message: "state is not declared in the manifest" });
   }
@@ -83,9 +81,8 @@ export const handlePlatformMethod = Effect.fnUntraced(function* (request: Reques
   const signature = request.headers.get(SIGNATURE_HEADER);
   if (signature !== null) return yield* handleSigned(signature, body);
 
-  const store = yield* Store;
-  const claims = verifyCallbackToken(store.callbackKey, bearerToken(request), yield* Clock.currentTimeMillis);
-  if (!claims || !(yield* store.installs.lookup(claims.installId))) {
+  const claims = verifyCallbackToken((yield* Store).callbackKey, bearerToken(request), yield* Clock.currentTimeMillis);
+  if (!claims || !(yield* (yield* Installs).lookup(claims.installId))) {
     return reply(null, new RpcError(ErrorCode.Unauthorized, "bad or expired callback token"), 401);
   }
   const parsed = parse(body);
@@ -172,9 +169,8 @@ const handleSigned = Effect.fnUntraced(function* (signature: string, body: strin
     return reply(parsed.id, new RpcError(ErrorCode.InvalidParams, "installId is required"));
   }
 
-  const store = yield* Store;
-  const install = yield* store.installs.lookup(installId.value);
-  const app = install && (yield* store.apps.lookup(install.appId));
+  const install = yield* (yield* Installs).lookup(installId.value);
+  const app = install && (yield* (yield* Store).apps.lookup(install.appId));
   const now = Math.floor((yield* Clock.currentTimeMillis) / 1000);
   if (!install || !app || !(yield* Effect.promise(() => verify(app.secret.reveal(), signature, body, { now })))) {
     return reply(parsed.id, new RpcError(ErrorCode.Unauthorized, "bad signature"), 401);

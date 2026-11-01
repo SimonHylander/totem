@@ -1,5 +1,4 @@
 import type { AppId, InstallId } from "@totem/ids";
-import type { InstallCore } from "@totem/installs";
 import type { Endpoint } from "@totem/protocol";
 import type { AppVersion } from "@totem/versions";
 import { Context, type DateTime, type Deferred, Effect, Layer, Ref } from "effect";
@@ -9,6 +8,7 @@ import { NotFound, type ProviderFailed } from "./errors.js";
 
 // In-memory platform state. Everything is lost on restart (ADR 0011). Records are immutable: every
 // write replaces the whole record through the Store, so a reader never sees a half-applied change.
+// Installs live in their own module, `installs.ts`, which is their only writer.
 
 /**
  * A secret the platform holds. `reveal()` is the only read. JSON, string conversion and Node's
@@ -108,14 +108,6 @@ export type PendingConnect = {
   readonly expiresAt: DateTime.Utc;
 };
 
-/** An install as the platform stores it: the lifecycle and bindings of `@totem/installs`, plus its config, credentials and state. */
-export type Install = InstallCore & {
-  /** By credential name. Deleting the install deletes them. */
-  readonly connections: ReadonlyMap<string, Connection>;
-  /** Install-scoped key-value state for apps that declare `needs.state`. */
-  readonly state: ReadonlyMap<string, unknown>;
-};
-
 /**
  * One collection of records keyed by `K`. Every operation is atomic, so a check and the write that
  * depends on it cannot interleave with another fiber's.
@@ -127,22 +119,16 @@ export type Table<K extends string, V> = {
   readonly lookup: (key: K) => Effect.Effect<V | undefined>;
   readonly all: Effect.Effect<ReadonlyArray<V>>;
   readonly put: (value: V) => Effect.Effect<void>;
-  readonly remove: (key: K) => Effect.Effect<void>;
   /** Remove and return a record, so only one caller can use it. */
   readonly take: (key: K) => Effect.Effect<V | undefined>;
   /** Replace a record with `f`'s result and return the new record. */
   readonly update: (key: K, f: (value: V) => V) => Effect.Effect<V, NotFound>;
-  /** Replace a record with `f`'s second value and return its first. */
-  readonly modify: <A>(key: K, f: (value: V) => readonly [A, V]) => Effect.Effect<A, NotFound>;
-  /** The first record matching `predicate`, or a new one from `create`. `created` says which. */
-  readonly findOrPut: (predicate: (value: V) => boolean, create: () => V) => Effect.Effect<{ value: V; created: boolean }>;
 };
 
 function makeTable<K extends string, V>(noun: string, keyOf: (value: V) => K): Effect.Effect<Table<K, V>> {
-  // A ReadonlyMap replaced on every write keeps insertion order, which "first install" relies on.
   return Effect.map(Ref.make<ReadonlyMap<K, V>>(new Map()), (ref): Table<K, V> => {
     const notFound = (key: K) => new NotFound({ message: `no ${noun} ${key}` });
-    const table: Table<K, V> = {
+    return {
       get: (key) =>
         Effect.flatMap(Ref.get(ref), (map) => {
           const value = map.get(key);
@@ -151,31 +137,17 @@ function makeTable<K extends string, V>(noun: string, keyOf: (value: V) => K): E
       lookup: (key) => Effect.map(Ref.get(ref), (map) => map.get(key)),
       all: Effect.map(Ref.get(ref), (map) => [...map.values()]),
       put: (value) => Ref.update(ref, (map) => withEntry(map, keyOf(value), value)),
-      remove: (key) => Ref.update(ref, (map) => withEntry(map, key, undefined)),
       take: (key) => Ref.modify(ref, (map) => [map.get(key), withEntry(map, key, undefined)] as const),
       update: (key, f) =>
-        table.modify(key, (value) => {
-          const next = f(value);
-          return [next, next];
-        }),
-      modify: <A,>(key: K, f: (value: V) => readonly [A, V]) =>
         Effect.flatten(
-          Ref.modify(ref, (map): readonly [Effect.Effect<A, NotFound>, ReadonlyMap<K, V>] => {
+          Ref.modify(ref, (map): readonly [Effect.Effect<V, NotFound>, ReadonlyMap<K, V>] => {
             const value = map.get(key);
             if (value === undefined) return [Effect.fail(notFound(key)), map];
-            const [result, next] = f(value);
-            return [Effect.succeed(result), withEntry(map, key, next)];
+            const next = f(value);
+            return [Effect.succeed(next), withEntry(map, key, next)];
           }),
         ),
-      findOrPut: (predicate, create) =>
-        Ref.modify(ref, (map): readonly [{ value: V; created: boolean }, ReadonlyMap<K, V>] => {
-          const found = [...map.values()].find(predicate);
-          if (found !== undefined) return [{ value: found, created: false }, map];
-          const value = create();
-          return [{ value, created: true }, withEntry(map, keyOf(value), value)];
-        }),
     };
-    return table;
   });
 }
 
@@ -192,7 +164,6 @@ export class Store extends Context.Service<
   Store,
   {
     readonly apps: Table<AppId, AppRecord>;
-    readonly installs: Table<InstallId, Install>;
     readonly sessions: Table<string, Session>;
     /** Keyed by `state`. */
     readonly pendingConnects: Table<string, PendingConnect>;
@@ -210,7 +181,6 @@ export class Store extends Context.Service<
       Effect.gen(function* () {
         return Store.of({
           apps: yield* makeTable("app", (app: AppRecord) => app.id),
-          installs: yield* makeTable("install", (install: Install) => install.id),
           sessions: yield* makeTable("session", (session: Session) => session.id),
           pendingConnects: yield* makeTable("connect", (pending: PendingConnect) => pending.state),
           apiTokens,

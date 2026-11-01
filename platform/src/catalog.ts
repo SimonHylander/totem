@@ -1,12 +1,12 @@
 import type { AppId } from "@totem/ids";
-import { declaresPort, providesAction, withBinding } from "@totem/installs";
-import type { AppVersion } from "@totem/versions";
+import { declaresPort, providesAction } from "@totem/installs";
 import type { BoundPort, CatalogApp } from "@totem/protocol";
 import { Effect } from "effect";
-import { newInstall, runInstallHook } from "./apps.js";
+import { runInstallHook } from "./apps.js";
 import { credentialStatus, startOAuthConnect } from "./connections.js";
 import { BadRequest, PortUnbound } from "./errors.js";
-import { Store, type Install } from "./store.js";
+import { Installs, type Install } from "./installs.js";
+import { Store } from "./store.js";
 
 // The catalog and port methods an app signs with its HMAC secret (ADR 0015). They let an app's own
 // UI show which public apps exist and bind, unbind and connect its ports. The calling install is
@@ -55,26 +55,20 @@ export const listPorts = Effect.fnUntraced(function* (caller: Install) {
  */
 export const bindPort = Effect.fnUntraced(function* (caller: Install, port: string, appId: AppId, action: string) {
   yield* declared(caller, port);
-  const { apps, installs } = yield* Store;
-  const app = yield* apps.lookup(appId);
+  const app = yield* (yield* Store).apps.lookup(appId);
   if (app?.visibility !== "public" || !app.latest) return yield* new BadRequest({ message: `no public app ${appId}` });
-  const { latest } = app;
-  const ofTenant = (install: Install) => install.tenantId === caller.tenantId && install.appId === appId;
+  const installs = yield* Installs;
   // An existing provider runs its pinned version, a new one the latest (ADR 0017).
-  const provides = ({ manifest }: AppVersion) => Effect.fromResult(providesAction(manifest, action, manifest.name));
-  yield* provides(((yield* installs.all).find(ofTenant) ?? { version: latest }).version);
-  // Atomic, so concurrent binds of one tenant share a single provider install.
-  const { value: provider, created } = yield* installs.findOrPut(ofTenant, () => newInstall(caller.tenantId, latest, {}));
+  const { install: provider, created } = yield* installs.provider(caller.tenantId, app.latest, ({ manifest }) =>
+    providesAction(manifest, action, manifest.name),
+  );
   if (created) yield* runInstallHook(app, provider);
-  else yield* provides(provider.version);
-  const binding = { installId: provider.id, action };
-  yield* installs.update(caller.id, (install) => withBinding(install, port, binding));
+  yield* installs.bind(caller.id, port, { installId: provider.id, action });
 });
 
 /** `ports/unbind`: remove a port's binding. The provider install stays, since other ports may use it. */
 export const unbindPort = Effect.fnUntraced(function* (caller: Install, port: string) {
-  yield* declared(caller, port);
-  yield* (yield* Store).installs.update(caller.id, (install) => withBinding(install, port, undefined));
+  yield* (yield* Installs).bind(caller.id, port, undefined);
 });
 
 /**
@@ -98,6 +92,6 @@ const declared = Effect.fnUntraced(function* (caller: Install, port: string) {
 /** The provider install a port is bound to, if it still exists in the caller's tenant. */
 const boundProvider = Effect.fnUntraced(function* (caller: Install, port: string) {
   const binding = caller.bindings.get(port);
-  const provider = binding && (yield* (yield* Store).installs.lookup(binding.installId));
+  const provider = binding && (yield* (yield* Installs).lookup(binding.installId));
   return provider?.tenantId === caller.tenantId ? provider : undefined;
 });

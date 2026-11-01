@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ErrorCode } from "@totem/protocol";
 import { appClient, defineApp, type Manifest } from "@totem/sdk";
-import { Store } from "./store.js";
+import { Installs } from "./installs.js";
 import { PLATFORM, testPlatform } from "./test-network.js";
 
 const text = { type: "object", required: ["text"], properties: { text: { type: "string" } } } as const;
@@ -40,7 +40,7 @@ async function setup() {
   const client = clientFor(own.appId);
   const publish = (appId: string, token = "op") => env.api(token, "PUT", `/api/apps/${appId}/visibility`, { visibility: "public" });
   const installsOf = (appId: string) =>
-    env.platform.runtime.runPromise(Store.use(({ installs }) => installs.all)).then((all) => all.filter((i) => i.appId === appId));
+    env.platform.runtime.runPromise(Installs.use((installs) => installs.all)).then((all) => all.filter((i) => i.appId === appId));
   return { ...env, own, shouterId, client, clientFor, publish, installsOf };
 }
 
