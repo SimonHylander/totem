@@ -1,12 +1,12 @@
 import { AppId, InstallId, TenantId, VersionId } from "@totem/ids";
-import { Active, type InstallCore } from "@totem/installs";
+import { Active, type InstallCore, type StoredInstall } from "@totem/installs";
 import { DateTime, Result } from "effect";
 import { describe, expect, it } from "vitest";
 import { authorize, can, type Authorized } from "./authorize.js";
 import type { ManagementAction, Principal } from "./model.js";
 
 const acme = TenantId.make("acme");
-const install: InstallCore = {
+const core: InstallCore = {
   id: InstallId.make("i-1"),
   tenantId: acme,
   appId: AppId.make("a-1"),
@@ -20,7 +20,9 @@ const install: InstallCore = {
   config: {},
   bindings: new Map(),
 };
-const foreign: InstallCore = { ...install, tenantId: TenantId.make("globex") };
+// Only the platform's store mints a StoredInstall, so the tests stand in for it.
+const install = core as StoredInstall;
+const foreign = { ...core, tenantId: TenantId.make("globex") } as StoredInstall;
 
 const operator: Principal = { id: "simon", role: { name: "operator" } };
 const admin: Principal = { id: "alice", role: { name: "tenantAdmin", tenantId: acme } };
@@ -73,6 +75,9 @@ describe("authorize", () => {
     const moved: Authorized<{ type: "install.create"; tenantId: TenantId }> = { ...proof, action: { type: "install.create", tenantId: TenantId.make("globex") } };
     // @ts-expect-error a proof for one action is not a proof for another
     const other: Authorized<{ type: "app.register" }> = proof;
+    // @ts-expect-error an install-scoped action takes a stored install, not a copy relabelled with the request's tenant
+    // eslint-disable-next-line @typescript-eslint/no-misused-spread -- the forgery under test
+    const rehomed: ManagementAction = { type: "install.invoke", install: { ...foreign, tenantId: acme } };
 
     expect(() => {
       // @ts-expect-error the authorized action is read-only
@@ -91,5 +96,6 @@ describe("authorize", () => {
       "install.create",
       "install.create",
     ]);
+    expect(rehomed.type).toBe("install.invoke");
   });
 });
