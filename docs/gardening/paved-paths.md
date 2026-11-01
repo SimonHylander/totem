@@ -74,13 +74,6 @@ The repo has two zones. Packages and the platform are Effect code. The protocol,
 - **Enforced by:** `no-restricted-properties` on `reveal`, with a file allowlist (W9)
 - **Why:** `Sealed` prints `[sealed]` in logs, JSON and the inspector.
 
-## Time
-
-- **Path:** Effect zone: `DateTime.now` and `Clock`. Tests drive time with `TestClock`.
-- **Exemplar:** `platform/src/connections.ts`
-- **Enforced by:** unenforced
-- **Why:** expiry logic is testable without waiting.
-
 ## Platform state
 
 - **Path:** a `Table` on `Store` in `platform/src/store.ts`. Records are immutable, and each write replaces the record.
@@ -94,13 +87,6 @@ The repo has two zones. Packages and the platform are Effect code. The protocol,
 - **Exemplar:** `packages/installs/src/transitions.test.ts`
 - **Enforced by:** unenforced
 - **Why:** each layer is tested at its own seam, with no network.
-
-## Events app UI
-
-- **Path:** one folder per feature in `examples/events/src/features/<name>/`, holding `<Name>Page.tsx` and `server.ts`. Routes stay thin: a `loader` calls a `createServerFn`, and the page reads it with `useLoaderData`. Styles are plain classes in `src/styles.css`.
-- **Exemplar:** `examples/events/src/features/registration/RegistrationPage.tsx`
-- **Enforced by:** unenforced
-- **Why:** adding a feature adds a folder (`docs/contract.md`).
 
 ## Validation at I/O boundaries (fork)
 
