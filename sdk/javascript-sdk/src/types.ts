@@ -1,9 +1,6 @@
 import type { FromSchema, JSONSchema } from "json-schema-to-ts";
 import type { CredentialValueFor, LogLevel, Manifest, Signature } from "@totem/protocol";
 
-// Everything here is derived from the manifest literal. Authors write the
-// manifest once and get typed handlers, ports, credentials and config.
-
 type Infer<S> = S extends JSONSchema ? FromSchema<S> : never;
 
 type ActionDefs<M> = M extends { provides: { actions: infer A extends Record<string, Signature> } }
@@ -43,10 +40,9 @@ type Logger = {
   [L in LogLevel]: (message: string, data?: Record<string, unknown>) => Promise<void>;
 };
 
-/** Only apps that declared `needs.state` get a state port. */
 type StatePort<M> = M extends { needs: { state: true } } ? { state: State } : Record<never, never>;
 
-/** Available in install and uninstall hooks. */
+/** Available in install and uninstall hooks. `state` is present only when the manifest declares `needs.state`. */
 export type InstallCtx<M> = {
   tenantId: string;
   installId: string;
@@ -63,6 +59,10 @@ export type CallCtx<M> = InstallCtx<M> & {
   ports: Ports<M>;
 };
 
+/**
+ * The handlers an app implements. Every type in this package is derived from the manifest literal,
+ * so authors write the manifest once and get typed handlers, ports, credentials and config.
+ */
 export type Handlers<M extends Manifest> = {
   actions: {
     [K in keyof ActionDefs<M>]: (input: ActionInput<M, K>, ctx: CallCtx<M>) => Promise<ActionOutput<M, K>>;

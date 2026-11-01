@@ -1,9 +1,5 @@
 import type { JSONSchema } from "json-schema-to-ts";
 
-// Hand-written mirrors of the JSON Schemas in this folder. contract.test.ts fails on drift.
-// TypeScript reads manifests at compile time through `as const`, so the
-// manifest type must accept literal schemas. Codegen is for Python and Go.
-
 export const PROTOCOL_VERSION = "1";
 
 /** An action or a port: a named input/output pair. */
@@ -45,7 +41,12 @@ export type ApiKeyNeed = {
 /** One member per credential type, each with only its own fields. */
 export type CredentialNeed = OAuth2Need | ApiKeyNeed;
 
-/** What an app provides and what it needs. Returned from `initialize`. */
+/**
+ * What an app provides and what it needs. Returned from `initialize`. The types in this file are
+ * hand-written mirrors of the JSON Schemas in this folder, and contract.test.ts fails on drift.
+ * TypeScript reads manifests at compile time through `as const`, so this type accepts literal
+ * schemas. Codegen is for Python and Go.
+ */
 export type Manifest = {
   name: string;
   version: string;
@@ -192,7 +193,6 @@ export const ErrorCode = {
   ActionNotFound: -32004,
   Unauthorized: -32005,
   DeadlineExceeded: -32006,
-  // JSON-RPC standard
   InvalidRequest: -32600,
   MethodNotFound: -32601,
   InvalidParams: -32602,

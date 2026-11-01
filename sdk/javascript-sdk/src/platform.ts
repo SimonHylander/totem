@@ -9,7 +9,7 @@ export type Platform = {
   call<K extends keyof PlatformMethods>(method: K, params: PlatformMethods[K]["params"]): Promise<PlatformMethods[K]["result"]>;
 };
 
-type ClientOptions = {
+export type ClientOptions = {
   url: string;
   token: string;
   fetch?: typeof fetch;

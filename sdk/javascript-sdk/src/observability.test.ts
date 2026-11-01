@@ -26,7 +26,6 @@ const app = defineApp(
   },
 );
 
-/** A runtime whose tracer records every span and whose logger keeps every line. */
 function recording() {
   const spans: Tracer.Span[] = [];
   const lines: ReturnType<typeof Logger.formatStructured.log>[] = [];

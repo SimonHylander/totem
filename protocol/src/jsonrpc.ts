@@ -39,10 +39,9 @@ export class RpcError extends Error {
   }
 }
 
-/** A method table: `{ [method]: { params, result } }`. */
 type MethodTable = Record<string, { params: unknown; result: unknown }>;
 
-type RpcOptions = {
+export type RpcOptions = {
   headers?: Record<string, string>;
   /** Headers computed from the exact request body, such as `X-Totem-Signature`. */
   sign?: (body: string) => Promise<Record<string, string>>;
