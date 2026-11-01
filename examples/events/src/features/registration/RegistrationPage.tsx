@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { getRouteApi } from "@tanstack/react-router";
-import { registerAttendee, registration } from "./server.js";
+import { Schema } from "effect";
+import { Registration, registerAttendee } from "./server.js";
 import { nextSpot, sheetRows, type Spot } from "./sheet.js";
 import { SheetRow, rowKey, type Signed } from "./SheetRow.js";
 
@@ -42,7 +43,7 @@ export function RegistrationPage() {
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = Object.fromEntries(new FormData(e.currentTarget));
-    const data = registration({ ...form, eventId });
+    const data = Schema.decodeUnknownSync(Registration)({ ...form, eventId });
     setPending(true);
     setFailed(false);
     try {

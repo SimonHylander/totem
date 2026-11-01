@@ -264,17 +264,10 @@ export function createPlatform<R = never>(options: PlatformOptions, layer: Layer
   return { handle, runtime };
 }
 
+const decodeJsonObject = Schema.decodeUnknownEffect(Schema.fromJsonString(JsonObject));
+
 const readJson = (request: Request) =>
-  Effect.tryPromise({
-    // eslint-disable-next-line no-restricted-syntax -- Request.text() is a Promise
-    try: async () => {
-      const text = await request.text();
-      return text === "" ? {} : (JSON.parse(text) as unknown);
-    },
-    catch: () => new BadRequest({ message: "body must be a JSON object" }),
-  }).pipe(
-    Effect.filterOrFail(
-      (body) => typeof body === "object" && body !== null && !Array.isArray(body),
-      () => new BadRequest({ message: "body must be a JSON object" }),
-    ),
+  Effect.tryPromise(() => request.text()).pipe(
+    Effect.flatMap((text) => decodeJsonObject(text === "" ? "{}" : text)),
+    Effect.mapError(() => new BadRequest({ message: "body must be a JSON object" })),
   );
