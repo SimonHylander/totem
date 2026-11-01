@@ -187,6 +187,7 @@ const STATUS: { [K in PlatformError["_tag"]]: number } = {
   CredentialMissing: 422,
   InvalidManifest: 422,
   ProviderFailed: 502,
+  StateConflict: 409,
   // A JSON-RPC error from an app: a failed action or a protocol error. The body keeps its code and data.
   AppFailed: 422,
 };

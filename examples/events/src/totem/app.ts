@@ -2,9 +2,9 @@ import { AppError, defineApp, type CallCtx } from "@totem/sdk";
 import { manifest } from "./manifest.js";
 
 // One install serves one tenant, and the tenant runs many events through it. Each event lives in
-// install state under `event:<id>`, and `events` lists the IDs oldest first. State has no
-// compare-and-set, so two calls that land at the same moment read the same event and the second
-// write wins: an attendee can be lost and the last seat can be given twice.
+// install state under `event:<id>`, and `events` lists the IDs oldest first. Every change to a stored
+// value goes through `state.update`, so calls that land at the same moment do not lose each other's
+// writes or give the last seat twice.
 
 type Attendee = {
   email: string;
@@ -31,7 +31,13 @@ async function loadEvent(state: State, id: string): Promise<Event> {
   return event;
 }
 
-const saveEvent = (state: State, event: Event) => state.set(eventKey(event.id), event);
+/** Store `f(event)` for a stored event and return it. `f` can run more than once, as `state.update` retries. */
+function updateEvent(state: State, id: string, f: (event: Event) => Event): Promise<Event> {
+  return state.update<Event>(eventKey(id), (event) => {
+    if (!event) throw new AppError(EVENT_NOT_FOUND, `no event ${id}`);
+    return f(event);
+  });
+}
 
 function summary({ id, name, capacity, attendees }: Event) {
   const registered = attendees.filter((a) => a.status === "registered").length;
@@ -42,8 +48,8 @@ export const app = defineApp(manifest, {
   actions: {
     createEvent: async ({ name, capacity }, ctx) => {
       const event: Event = { id: crypto.randomUUID().slice(0, 8), name, capacity, attendees: [] };
-      await saveEvent(ctx.state, event);
-      await ctx.state.set(EVENTS, [...((await ctx.state.get<string[]>(EVENTS)) ?? []), event.id]);
+      await ctx.state.set(eventKey(event.id), event);
+      await ctx.state.update<string[]>(EVENTS, (ids) => [...(ids ?? []), event.id]);
       return { eventId: event.id };
     },
 
@@ -74,28 +80,31 @@ export const app = defineApp(manifest, {
         await ctx.log.warn("CRM sync failed", { email: key, error: error instanceof Error ? error.message : String(error) });
       }
 
-      const attendee: Attendee = {
-        ...person,
-        status: summary(event).seatsLeft > 0 ? "registered" : "waitlisted",
-        checkedIn: false,
-        crmContactId,
-      };
-      const attendees = [...event.attendees, attendee];
-      await saveEvent(ctx.state, { ...event, attendees });
-      await ctx.log.info(`${attendee.status} for ${event.name}`, { email: key });
-      return placement(attendees, attendee);
+      // Seats are counted on the event as stored now, which may have changed during the CRM call.
+      const saved = await updateEvent(ctx.state, eventId, (current) =>
+        current.attendees.some((a) => a.email === key)
+          ? current
+          : {
+              ...current,
+              attendees: [
+                ...current.attendees,
+                { ...person, status: summary(current).seatsLeft > 0 ? "registered" : "waitlisted", checkedIn: false, crmContactId },
+              ],
+            },
+      );
+      // The update above always leaves this attendee on the event.
+      const attendee = saved.attendees.find((a) => a.email === key)!;
+      await ctx.log.info(`${attendee.status} for ${saved.name}`, { email: key });
+      return placement(saved.attendees, attendee);
     },
 
     checkIn: async ({ eventId, email }, ctx) => {
-      const event = await loadEvent(ctx.state, eventId);
       const key = normalize(email);
-      if (event.attendees.find((a) => a.email === key)?.status !== "registered") return { checkedIn: false };
-
-      await saveEvent(ctx.state, {
+      const saved = await updateEvent(ctx.state, eventId, (event) => ({
         ...event,
-        attendees: event.attendees.map((a) => (a.email === key ? { ...a, checkedIn: true } : a)),
-      });
-      return { checkedIn: true };
+        attendees: event.attendees.map((a) => (a.email === key && a.status === "registered" ? { ...a, checkedIn: true } : a)),
+      }));
+      return { checkedIn: saved.attendees.some((a) => a.email === key && a.checkedIn) };
     },
 
     listAttendees: async ({ eventId }, ctx) => {

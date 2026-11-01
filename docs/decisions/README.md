@@ -21,3 +21,4 @@ One file per decision. Status is `Accepted`, `Proposed` or `Superseded`. To chan
 | [0015](0015-apps-manage-their-ports.md) | Apps list public apps and bind, unbind and connect their own ports through signed methods | Accepted |
 | [0016](0016-trace-metadata.md) | Trace metadata in the signed request, anchored by the callback token | Accepted |
 | [0017](0017-versioned-manifests.md) | Installs pin an immutable manifest version and upgrade explicitly when compatible | Proposed |
+| [0018](0018-conditional-state-writes.md) | State writes can name the version they read. `StateConflict` on a stale write, `state.update` in the JS SDK | Accepted |

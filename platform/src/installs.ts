@@ -15,7 +15,7 @@ import {
 } from "@totem/installs";
 import { requireCompatible, type AppVersion, type IncompatibleVersion } from "@totem/versions";
 import { Context, Effect, Layer, Ref, Result } from "effect";
-import { NotFound } from "./errors.js";
+import { NotFound, StateConflict } from "./errors.js";
 import { withEntry, type Connection, type OAuthConnection } from "./store.js";
 
 // Stored installs and their one writer (docs/contract.md rule 3). Every change to an install goes
@@ -27,8 +27,16 @@ export type Install = InstallCore & {
   /** By credential name. Deleting the install deletes them. */
   readonly connections: ReadonlyMap<string, Connection>;
   /** Install-scoped key-value state for apps that declare `needs.state`. */
-  readonly state: ReadonlyMap<string, unknown>;
+  readonly state: ReadonlyMap<string, StateEntry>;
+  /**
+   * The version the latest state write took. Every write takes the next one, so a key never gets
+   * back a version it had before, even after it was deleted and set again.
+   */
+  readonly stateVersion: number;
 };
+
+/** One state key's value, and the version a conditional `state/set` compares. */
+export type StateEntry = { readonly value: unknown; readonly version: number };
 
 /** The ways binding a port can fail (ADR 0013). NotFound names a missing provider install. */
 type BindingError = NotFound | PortNotDeclared | ForeignInstall | ActionNotProvided;
@@ -80,8 +88,16 @@ export class Installs extends Context.Service<
       expected: OAuthConnection,
       next: OAuthConnection | undefined,
     ) => Effect.Effect<OAuthConnection | null>;
-    /** Set one state key. A null value deletes it. */
-    readonly setState: (id: InstallId, key: string, value: unknown) => Effect.Effect<void, NotFound>;
+    /**
+     * Set one state key, or delete it when `value` is null. With `expected`, the write applies only
+     * if the key is still at that version (0 when unset). Returns the key's new version, 0 when deleted.
+     */
+    readonly setState: (
+      id: InstallId,
+      key: string,
+      value: unknown,
+      expected: number | undefined,
+    ) => Effect.Effect<number, NotFound | StateConflict>;
   }
 >()("@totem/platform/Installs") {
   static readonly layer = Layer.effect(
@@ -183,10 +199,16 @@ export class Installs extends Context.Service<
             Effect.catchTag("NotFound", () => Effect.succeed(null)),
           ),
 
-        setState: (id, key, value) =>
-          update(id, (install) => Result.succeed({ ...install, state: withEntry(install.state, key, value === null ? undefined : value) })).pipe(
-            Effect.asVoid,
-          ),
+        setState: (id, key, value, expected) =>
+          update(id, (install) => {
+            const current = install.state.get(key)?.version ?? 0;
+            if (expected !== undefined && expected !== current) {
+              return Result.fail(new StateConflict({ message: `state "${key}" is at version ${current}, not ${expected}` }));
+            }
+            const version = install.stateVersion + 1;
+            const entry = value === null ? undefined : { value, version };
+            return Result.succeed({ ...install, state: withEntry(install.state, key, entry), stateVersion: version });
+          }).pipe(Effect.map((install) => install.state.get(key)?.version ?? 0)),
       });
     }),
   );
@@ -208,6 +230,7 @@ function newInstall(tenantId: TenantId, version: AppVersion, config: Readonly<Re
     bindings: new Map(),
     connections: new Map(),
     state: new Map(),
+    stateVersion: 0,
   };
 }
 

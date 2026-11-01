@@ -40,6 +40,11 @@ export class ProviderFailed extends Schema.TaggedError<ProviderFailed>()("Provid
   message: Schema.String,
 }) {}
 
+/** A conditional `state/set` named a version the key no longer has. */
+export class StateConflict extends Schema.TaggedError<StateConflict>()("StateConflict", {
+  message: Schema.String,
+}) {}
+
 export type PlatformError =
   | Unauthenticated
   | Forbidden
@@ -58,4 +63,5 @@ export type PlatformError =
   | CredentialMissing
   | InvalidManifest
   | ProviderFailed
+  | StateConflict
   | AppFailed;

@@ -67,4 +67,20 @@ describe("Installs", () => {
     );
     expect(outcome).toEqual(["Active", "IllegalTransition", "NotFound"]);
   });
+
+  it("writes state conditionally and never reuses a key's version", async () => {
+    const outcome = await run(
+      Effect.gen(function* () {
+        const installs = yield* Installs;
+        const { id } = yield* installs.create(acme, crm, {}, {});
+        const first = yield* installs.setState(id, "n", 1, 0);
+        const stale = yield* Effect.flip(installs.setState(id, "n", 2, 0));
+        const deleted = yield* installs.setState(id, "n", null, first);
+        const again = yield* installs.setState(id, "n", 1, 0);
+        const reused = yield* Effect.flip(installs.setState(id, "n", 3, first));
+        return { first, stale: stale._tag, deleted, again, reused: reused._tag };
+      }),
+    );
+    expect(outcome).toEqual({ first: 1, stale: "StateConflict", deleted: 0, again: 3, reused: "StateConflict" });
+  });
 });

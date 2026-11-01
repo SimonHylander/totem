@@ -51,10 +51,15 @@
       },
       "result": {
         "type": "object",
-        "required": ["value"],
+        "required": ["value", "version"],
         "additionalProperties": false,
         "properties": {
-          "value": { "description": "Any JSON value. `null` when the key is unset." }
+          "value": { "description": "Any JSON value. `null` when the key is unset." },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "`0` while the key is unset. Every write gives it a new version, and a key never gets back a version it had before."
+          }
         }
       }
     },
@@ -65,10 +70,22 @@
         "additionalProperties": false,
         "properties": {
           "key": { "type": "string" },
-          "value": { "description": "Any JSON value. `null` deletes the key." }
+          "value": { "description": "Any JSON value. `null` deletes the key." },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Write only if the key is still at this version, as `state/get` returned it. Otherwise the call fails with `StateConflict` and nothing is written. Omitted, the write always applies."
+          }
         }
       },
-      "result": { "type": "object", "additionalProperties": false }
+      "result": {
+        "type": "object",
+        "required": ["version"],
+        "additionalProperties": false,
+        "properties": {
+          "version": { "type": "integer", "minimum": 0, "description": "The key's version after this write. `0` when it deleted the key." }
+        }
+      }
     },
     "log": {
       "params": {
