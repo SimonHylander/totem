@@ -114,7 +114,7 @@ export const manifest = {
   needs: {
     state: true,
     actions: {
-      // Bound to a CRM install, such as the hubspot example's upsertContact (ADR 0013).
+      /** Bound to a CRM install, such as the hubspot example's upsertContact (ADR 0013). */
       upsertContact: {
         description: "Create or update a CRM contact by email.",
         input: { type: "object", required: ["email"], properties: person, additionalProperties: false },

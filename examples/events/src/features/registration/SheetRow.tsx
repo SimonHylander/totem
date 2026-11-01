@@ -63,7 +63,6 @@ export function SheetRow({ row, signed, draft }: { row: Row; signed: Signed | nu
               <span className="row-sub">{row.list === "seats" ? "Your seat" : "Your place on the waitlist"}</span>
             </span>
           ) : draft ? (
-            // Hidden from screen readers so they do not echo every keystroke from the form.
             <span className="row-draft" aria-hidden="true">
               {draft}
             </span>

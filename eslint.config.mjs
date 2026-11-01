@@ -31,8 +31,6 @@ const noStringIds = [
 
 const tests = ["**/*.test.ts", "**/test-network.ts"];
 
-const commentsNotYetRemoved = ["examples/**"];
-
 export default tseslint.config(
   { ignores: ["**/dist/**", "**/routeTree.gen.ts", "examples/hubspot/totem-test/**"] },
   js.configs.recommended,
@@ -49,7 +47,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: commentsNotYetRemoved,
     plugins: { totem },
     linterOptions: { reportUnusedDisableDirectives: "error" },
     rules: { "totem/no-comments": ["error", { decisionsDir: `${import.meta.dirname}/docs/decisions` }] },

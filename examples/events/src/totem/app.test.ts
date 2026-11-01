@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { AppError, fakePlatform } from "@totem/sdk";
 import { EVENT_NOT_FOUND, app } from "./app.js";
 
-/** A platform whose CRM port hands out sequential contact IDs, plus helpers bound to it. */
 function setup(upsertContact = sequentialCrm()) {
   const platform = fakePlatform(app, { ports: { upsertContact } });
   const createEvent = (name: string, capacity: number) => app.invoke("createEvent", { name, capacity }, { platform });

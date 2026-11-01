@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { nextSpot, sheetRows, takenWith, type Row } from "./sheet.js";
 
-/** A compact picture of the rows: `3x` taken line, `4o` open line, `2-13x` range, `@15` you, `|` rule. */
 function draw(rows: Row[]): string {
   return rows
     .map((row) => {

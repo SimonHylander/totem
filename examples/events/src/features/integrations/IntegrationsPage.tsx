@@ -2,8 +2,6 @@ import { useState } from "react";
 import { Link, getRouteApi, useRouter } from "@tanstack/react-router";
 import { connect, disable, enable, type Port } from "./server.js";
 
-// There is no login yet, so anyone who can reach this page can change the tenant's integrations (ADR 0015).
-
 const route = getRouteApi("/integrations");
 
 export function IntegrationsPage() {
@@ -12,7 +10,6 @@ export function IntegrationsPage() {
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  /** Run one change, then reload the list. */
   const run = async (change: () => Promise<unknown>) => {
     setPending(true);
     setFailed(false);

@@ -21,7 +21,6 @@ export const Route = createRootRoute({
   ),
 });
 
-/** The top bar: the app name on the event list, a way back to it everywhere else. */
 function Bar() {
   const home = useRouterState({ select: (state) => state.location.pathname === "/" });
   return (
