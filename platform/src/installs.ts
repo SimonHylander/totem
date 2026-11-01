@@ -19,10 +19,6 @@ import { Context, Effect, Layer, Ref, Result } from "effect";
 import { NotFound } from "./errors.js";
 import { withEntry, type Connection, type OAuthConnection } from "./store.js";
 
-// Stored installs and their one writer (docs/contract.md rule 3). Every change to an install goes
-// through `Installs`. Each change reads and writes the whole collection in one atomic step, so the
-// check that guards a write cannot interleave with another fiber's write.
-
 /** An install as the platform stores it: the lifecycle and bindings of `@totem/installs`, plus its config, credentials and state. */
 export type Install = InstallCore & {
   /** By credential name. Deleting the install deletes them. */
@@ -31,9 +27,13 @@ export type Install = InstallCore & {
   readonly state: ReadonlyMap<string, unknown>;
 };
 
-/** The ways binding a port can fail (ADR 0013). NotFound names a missing provider install. */
 type BindingError = NotFound | PortNotDeclared | ForeignInstall | ActionNotProvided;
 
+/**
+ * Stored installs and their one writer (docs/contract.md rule 3). Every change to an install goes
+ * through `Installs`. Each change reads and writes the whole collection in one atomic step, so the
+ * check that guards a write cannot interleave with another fiber's write.
+ */
 export class Installs extends Context.Service<
   Installs,
   {
@@ -43,7 +43,7 @@ export class Installs extends Context.Service<
     readonly lookup: (id: InstallId) => Effect.Effect<Install | undefined>;
     /** Every install, oldest first. */
     readonly all: Effect.Effect<ReadonlyArray<Install>>;
-    /** Store a Pending install of `version`, with each of `bindings` checked against its stored provider. */
+    /** Store a Pending install of `version`, with each of `bindings` checked against its stored provider (ADR 0013). NotFound names a missing provider install. */
     readonly create: (
       tenantId: TenantId,
       version: AppVersion,
@@ -64,9 +64,13 @@ export class Installs extends Context.Service<
     readonly activate: (id: InstallId) => Effect.Effect<Install, NotFound | IllegalTransition>;
     /** Delete an install with its connections and state. */
     readonly remove: (id: InstallId) => Effect.Effect<void>;
-    /** Bind `port` after the ADR 0013 checks, or unbind it when `binding` is undefined. */
+    /** Bind `port` after the ADR 0013 checks, or unbind it when `binding` is undefined. NotFound names a missing install or provider install. */
     readonly bind: (id: InstallId, port: string, binding: PortBinding | undefined) => Effect.Effect<void, BindingError>;
-    /** Move the install to `version` if the change is compatible (ADR 0017). Returns the version it runs afterwards. */
+    /**
+     * Move the install to `version` if the change is compatible (ADR 0017). Returns the version it
+     * runs afterwards. The check reads the stored version inside the write, so a concurrent upgrade
+     * cannot be skipped over.
+     */
     readonly upgrade: (id: InstallId, version: AppVersion) => Effect.Effect<AppVersion, NotFound | IncompatibleVersion>;
     /** Store a connected credential, replacing any earlier one. */
     readonly connect: (id: InstallId, name: string, connection: Connection) => Effect.Effect<void, NotFound>;
@@ -88,10 +92,8 @@ export class Installs extends Context.Service<
   static readonly layer = Layer.effect(
     Installs,
     Effect.gen(function* () {
-      // A ReadonlyMap replaced on every write keeps insertion order, which "first install" relies on.
       const ref = yield* Ref.make<Stored>(new Map());
 
-      /** Apply `f` to the collection atomically. A failure writes nothing. */
       const write = <A, E>(f: (all: Stored) => Result.Result<readonly [A, Stored], E>): Effect.Effect<A, E> =>
         Effect.flatten(
           Ref.modify(ref, (all): readonly [Effect.Effect<A, E>, Stored] => {
@@ -102,7 +104,6 @@ export class Installs extends Context.Service<
           }),
         );
 
-      /** Replace one install with `f`'s result and return the new record. */
       const update = <E>(
         id: InstallId,
         f: (install: Install, all: Stored) => Result.Result<Install, E>,
@@ -198,7 +199,6 @@ type Stored = ReadonlyMap<InstallId, Install>;
 
 const notFound = (id: InstallId) => new NotFound({ message: `no install ${id}` });
 
-/** A Pending install of `version` with no bindings, connections or state. */
 function newInstall(tenantId: TenantId, version: AppVersion, config: Readonly<Record<string, unknown>>): Install {
   return {
     id: InstallId.make(crypto.randomUUID()),
@@ -213,10 +213,8 @@ function newInstall(tenantId: TenantId, version: AppVersion, config: Readonly<Re
   };
 }
 
-/** The ADR 0013 checks for binding `port` of `install`, against the provider stored in `all`. */
 const checked = (install: Install, port: string, binding: PortBinding, all: Stored): Result.Result<PortBinding, BindingError> =>
   Result.gen(function* () {
-    // An undeclared port fails before a missing provider does.
     yield* declaresPort(install.version.manifest, port);
     const provider = all.get(binding.installId);
     if (!provider) return yield* Result.fail(notFound(binding.installId));

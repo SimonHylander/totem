@@ -12,8 +12,6 @@ import { Conflict, InvalidManifest } from "./errors.js";
 import { Installs, type Install } from "./installs.js";
 import { PlatformConfig, Sealed, Store, randomToken, type AppRecord, type Visibility } from "./store.js";
 
-// Apps and installs: registration, manifest pull, install hooks and action invocation.
-
 /** The path apps call platform methods on. `initialize` sends `baseUrl + PLATFORM_METHODS_PATH`. */
 export const PLATFORM_METHODS_PATH = "/rpc";
 
@@ -38,7 +36,9 @@ export const registerApp = Effect.fnUntraced(function* (_: Authorized<{ type: "a
 
 /**
  * Pull the manifest through `initialize` (ADR 0007). A manifest that differs from the latest version
- * becomes a new version. Existing installs keep theirs until they upgrade (ADR 0017).
+ * becomes a new version. Existing installs keep theirs until they upgrade (ADR 0017). OAuth provider
+ * endpoints receive client secrets and refresh tokens, so their parsed URLs must be https (ADR 0012),
+ * not just match the schema pattern.
  */
 export const initializeApp = Effect.fnUntraced(function* (_: Authorized<{ type: "app.register" }>, appId: AppId) {
   const { apps } = yield* Store;
@@ -111,7 +111,6 @@ export const setBinding = Effect.fnUntraced(function* (
  */
 export const upgradeInstall = Effect.fnUntraced(function* ({ action: { install } }: Authorized<InstallAction<"install.upgrade">>) {
   const latest = (yield* (yield* Store).apps.get(install.appId)).latest ?? install.version;
-  // Installs compares with the stored version inside the write, so a concurrent upgrade cannot be skipped over.
   return yield* (yield* Installs).upgrade(install.id, latest);
 });
 
@@ -125,10 +124,6 @@ export const invokeAction = Effect.fnUntraced(function* (
   return yield* invoke(active, action, input, CallDepth.make(0));
 });
 
-/**
- * Provider endpoints receive client secrets and refresh tokens, so check the parsed URL rather
- * than trusting the schema pattern alone (ADR 0012).
- */
 const checkEndpoints = Effect.fnUntraced(function* (manifest: Manifest) {
   const { allowLocalhost } = yield* PlatformConfig;
   for (const [name, need] of Object.entries(manifest.needs.credentials ?? {})) {

@@ -23,9 +23,6 @@ import { handlePlatformMethod } from "./platform-methods.js";
 import { Installs } from "./installs.js";
 import { PlatformConfig, Store } from "./store.js";
 
-// The HTTP shell. Routes decode the request, authorize it and call one operation with the proof.
-// This is the only place that maps domain failures to HTTP statuses.
-
 export type PlatformOptions = {
   /** The platform's public origin, such as `http://localhost:3000`. */
   baseUrl: string;
@@ -41,10 +38,6 @@ const NonEmpty = Schema.NonEmptyString;
 const PortBinding = Schema.Struct({ installId: InstallId, action: NonEmpty });
 const JsonObject = Schema.Record(Schema.String, Schema.Unknown);
 
-/**
- * One management route: a path template such as `/api/apps/:appId`, the schemas its path params and
- * body decode with, and the operation it runs.
- */
 type Route = {
   method: string;
   path: string;
@@ -75,7 +68,6 @@ function route<P extends Schema.Decoder<unknown>, S extends Schema.Decoder<unkno
 
 const NoParams = Schema.Struct({});
 
-/** Authorize an action that names no install. */
 const allowed = <A extends ManagementAction>(principal: Principal, action: A) => Effect.fromResult(authorize(principal, action));
 
 const routes: Route[] = [
@@ -168,7 +160,6 @@ const routes: Route[] = [
   ),
 ];
 
-/** The HTTP status for each domain failure. */
 const STATUS: { [K in PlatformError["_tag"]]: number } = {
   Unauthenticated: 401,
   Forbidden: 403,
@@ -187,7 +178,6 @@ const STATUS: { [K in PlatformError["_tag"]]: number } = {
   CredentialMissing: 422,
   InvalidManifest: 422,
   ProviderFailed: 502,
-  // A JSON-RPC error from an app: a failed action or a protocol error. The body keeps its code and data.
   AppFailed: 422,
 };
 
@@ -205,13 +195,12 @@ const handleApi = Effect.fnUntraced(function* (request: Request, pathname: strin
     if (!match) continue;
     const principal = yield* authenticate(bearerToken(request));
     const body = request.method === "GET" ? {} : yield* readJson(request);
-    // The principal has authenticated, so the caller's W3C traceparent header can be the parent (ADR 0016).
-    const parent = HttpTraceContext.fromHeaders(Headers.fromInput(request.headers));
+    const authenticatedCallerTrace = HttpTraceContext.fromHeaders(Headers.fromInput(request.headers));
     const run = route.run(principal, match.groups ?? {}, body).pipe(
       Effect.withSpan(`${route.method} ${route.path}`, {
         kind: "server",
         attributes: { "http.route": route.path, "totem.principal": principal.id },
-        ...(Option.isSome(parent) && { parent: parent.value }),
+        ...(Option.isSome(authenticatedCallerTrace) && { parent: authenticatedCallerTrace.value }),
       }),
     );
     return Response.json(yield* run);
@@ -219,7 +208,6 @@ const handleApi = Effect.fnUntraced(function* (request: Request, pathname: strin
   return Response.json({ error: `no route for ${request.method} ${pathname}` }, { status: 404 });
 });
 
-/** Route one request to the management API, the platform-methods endpoint or the browser pages. */
 const handleRequest = (request: Request): Effect.Effect<Response, never, Services> => {
   const { pathname } = new URL(request.url);
   const handled: Effect.Effect<Response, PlatformError, Services> =
@@ -229,7 +217,6 @@ const handleRequest = (request: Request): Effect.Effect<Response, never, Service
         ? handleApi(request, pathname).pipe(Effect.catch((error) => Effect.succeed(errorResponse(error))))
         : handleBrowser(request).pipe(
             Effect.catch((error) => Effect.succeed(errorPage(STATUS[error._tag], error.message))),
-            // Public pages, so a trace header from the browser is never continued.
             Effect.withSpan(`${request.method} ${browserRoute(pathname)}`, { kind: "server", root: true }),
           );
   return handled.pipe(
@@ -254,8 +241,10 @@ export function platformLayer({ baseUrl, principals, allowLocalhost = false, fet
 
 /**
  * Build the platform. `handle` serves the management API, the browser pages and the platform-methods
- * endpoint. `layer` adds or replaces services, such as a TestClock. `runtime` runs effects against
- * the same services, which tests use to drive the clock.
+ * endpoint, and is the only place that maps domain failures to HTTP statuses. A management call
+ * continues the caller's W3C trace once its principal has authenticated. Browser pages are public, so
+ * they never continue one (ADR 0016). `layer` adds or replaces services, such as a TestClock.
+ * `runtime` runs effects against the same services, which tests use to drive the clock.
  */
 export function createPlatform<R = never>(options: PlatformOptions, layer: Layer.Layer<R> = Layer.empty as Layer.Layer<R>) {
   const runtime = ManagedRuntime.make(Layer.merge(platformLayer(options), layer));

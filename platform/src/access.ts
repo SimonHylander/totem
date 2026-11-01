@@ -7,8 +7,6 @@ import { Unauthenticated } from "./errors.js";
 import { Installs, type Install } from "./installs.js";
 import { Store, randomToken } from "./store.js";
 
-// Platform access (ADR 0011). Only the management API uses it. Apps never see a principal.
-
 /** An install-scoped action on a stored install. */
 export type InstallAction<T extends InstallActionType> = { readonly type: T; readonly install: StoredInstall<Install> };
 
@@ -28,7 +26,7 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-/** Resolve a management token to its principal. */
+/** Resolve a management token to its principal (ADR 0011). Only the management API uses it. Apps never see a principal. */
 export const authenticate = Effect.fnUntraced(function* (token: string) {
   const principal = (yield* Store).apiTokens.get(hashToken(token));
   if (!principal) return yield* new Unauthenticated({ message: "missing or unknown management token" });

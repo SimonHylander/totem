@@ -4,9 +4,6 @@ import type { AppFailed, CallDepthExceeded, PortUnbound } from "@totem/runtime";
 import type { IncompatibleVersion } from "@totem/versions";
 import { Schema } from "effect";
 
-// Domain failures. Operations fail with these and never name a wire format. The HTTP shell maps
-// each tag to a status (`http.ts`), the JSON-RPC shell to an ErrorCode (`platform-methods.ts`).
-
 /** No or unknown management token. */
 export class Unauthenticated extends Schema.TaggedError<Unauthenticated>()("Unauthenticated", {
   message: Schema.String,

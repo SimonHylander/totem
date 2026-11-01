@@ -24,10 +24,6 @@ import { BadRequest, NotDeclared, type PlatformError } from "./errors.js";
 import { Installs, type Install } from "./installs.js";
 import { Store, type PlatformConfig } from "./store.js";
 
-// The endpoint apps call (ADR 0008). The callback token names the install, so params carry no tenant.
-// Signed methods are the exception: the app signs them with its HMAC secret and names one of its
-// installs (ADR 0014, ADR 0015).
-
 type Services = Store | Installs | PlatformConfig | HttpClient.HttpClient | AppTransport | InstallRepo;
 
 type Methods = {
@@ -51,7 +47,6 @@ const methods: Methods = {
     return {};
   }),
 
-  // The app's own line. It runs under the call's span and opens none (ADR 0016).
   log: (claims, { level, message, data }) =>
     Effect.logWithLevel(LOG_LEVELS[level])(message, ...(data ? [data] : [])).pipe(
       Effect.annotateLogs({ source: "app", installId: claims.installId, ...(claims.callId && { callId: claims.callId }) }),
@@ -64,7 +59,6 @@ const methods: Methods = {
   }),
 };
 
-/** The calling install, if its manifest declares state. */
 const statefulInstall = Effect.fnUntraced(function* (claims: CallbackClaims) {
   const install = yield* (yield* Installs).get(claims.installId);
   if (install.version.manifest.needs.state !== true) {
@@ -75,7 +69,16 @@ const statefulInstall = Effect.fnUntraced(function* (claims: CallbackClaims) {
 
 const isMethod = (name: string): name is keyof PlatformMethods => name in methods;
 
-/** Handle one JSON-RPC request from an app. */
+/**
+ * Handle one JSON-RPC request from an app (ADR 0008). The callback token names the install, so params
+ * carry no tenant. Signed methods are the exception: the app signs them with its HMAC secret and
+ * names one of its installs (ADR 0014, ADR 0015). An unknown install, another app's install and a bad
+ * signature all answer Unauthorized, so signed methods do not reveal which installs exist.
+ *
+ * Tracing (ADR 0016): a callback runs under the platform span its token names, whatever the app
+ * sends, and the app's own span in the same trace becomes a link. `log` runs under that span and
+ * opens none. A signed method continues the app's trace once its signature has verified.
+ */
 export const handlePlatformMethod = Effect.fnUntraced(function* (request: Request) {
   const body = yield* Effect.promise(() => request.text());
   const signature = request.headers.get(SIGNATURE_HEADER);
@@ -96,8 +99,6 @@ export const handlePlatformMethod = Effect.fnUntraced(function* (request: Reques
   ) => Effect.Effect<unknown, PlatformError, Services>;
   const handled = method(claims, parsed.params);
 
-  // The token names the platform span that made the call, so callbacks are its children whatever the
-  // app sends. The app's own span, if it is in the same trace, becomes a link (ADR 0016).
   const parent = claims.trace && Tracer.externalSpan(claims.trace);
   if (parsed.method === "log") return yield* run(parsed, parent ? Effect.withParentSpan(handled, parent) : handled);
   const sent = parseTrace(parsed.trace);
@@ -111,10 +112,6 @@ export const handlePlatformMethod = Effect.fnUntraced(function* (request: Reques
 
 type Params = Record<string, unknown>;
 
-/**
- * Methods the app signs with its HMAC secret (ADR 0014, ADR 0015). The install is verified before
- * the method runs, and each method checks its own remaining params.
- */
 type SignedMethods = {
   [K in keyof SignedPlatformMethods]: (
     install: Install,
@@ -153,10 +150,6 @@ const signedMethods: SignedMethods = {
 
 const isSignedMethod = (name: string): name is keyof SignedPlatformMethods => name in signedMethods;
 
-/**
- * A request signed by the app. An unknown install, an install of another app and a bad signature
- * all answer Unauthorized, so signed methods do not reveal which installs exist.
- */
 const handleSigned = Effect.fnUntraced(function* (signature: string, body: string) {
   const parsed = parse(body);
   if (parsed instanceof Response) return parsed;
@@ -180,7 +173,6 @@ const handleSigned = Effect.fnUntraced(function* (signature: string, body: strin
     params: Params,
   ) => Effect.Effect<unknown, PlatformError, Services>;
 
-  // The signature has verified, so the app's trace member can be the parent (ADR 0016).
   const sent = parseTrace(parsed.trace);
   const attributes = { "totem.install_id": install.id, "totem.app_id": install.appId };
   return yield* run(
@@ -195,14 +187,12 @@ function isObject(value: unknown): value is Params {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** A required param, decoded with `schema`. */
 function param<S extends Schema.Decoder<unknown>>(params: Params, field: string, schema: S): Effect.Effect<S["Type"], BadRequest> {
   return Schema.decodeUnknownEffect(schema)(params[field]).pipe(
     Effect.mapError(() => new BadRequest({ message: `${field} is required` })),
   );
 }
 
-/** A required non-empty string param. */
 const string = (params: Params, field: string) => param(params, field, Schema.NonEmptyString);
 
 function parse(body: string): JsonRpcRequest | Response {
@@ -215,7 +205,6 @@ function parse(body: string): JsonRpcRequest | Response {
   return isJsonRpcRequest(parsed) ? parsed : reply(null, new RpcError(ErrorCode.InvalidRequest, "not a JSON-RPC 2.0 request"));
 }
 
-/** The JSON-RPC code for each domain failure. AppFailed keeps the app's own code. */
 const RPC_CODES: { [K in Exclude<PlatformError["_tag"], "AppFailed">]: number } = {
   Unauthenticated: ErrorCode.Unauthorized,
   Forbidden: ErrorCode.Unauthorized,
@@ -242,7 +231,6 @@ function toRpcError(error: PlatformError): RpcError {
     : new RpcError(RPC_CODES[error._tag], error.message);
 }
 
-/** Run a method and wrap its result or error in a JSON-RPC response. Defects answer InternalError. */
 function run<R>(request: JsonRpcRequest, method: Effect.Effect<unknown, PlatformError, R>): Effect.Effect<Response, never, R> {
   return method.pipe(
     Effect.map((result) => reply(request.id, { result })),

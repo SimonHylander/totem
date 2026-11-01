@@ -32,7 +32,6 @@ const mailer = defineApp(manifest, {
   },
 });
 
-/** The mailer installed for tenant acme. */
 async function installed() {
   const env = testPlatform(mailer);
   return { ...env, ...(await env.install()) };

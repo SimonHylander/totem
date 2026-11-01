@@ -19,12 +19,8 @@ import {
   type PendingConnect,
 } from "./store.js";
 
-// Connector credentials (ADR 0009, ADR 0012). Tenants connect them, the platform stores and
-// refreshes them, and `credentials/get` hands the current value to the app.
-
 export const OAUTH_CALLBACK_PATH = "/oauth/callback";
 const CONNECT_TTL = { minutes: 10 };
-/** `credentials/get` refreshes first when less than this remains on the access token. */
 const REFRESH_MARGIN = { minutes: 5 };
 
 /** Each provider has its own callback, so a code from one provider cannot reach another's token URL. */
@@ -102,7 +98,7 @@ export const startOAuthConnect = Effect.fnUntraced(function* (
   url.searchParams.set("redirect_uri", yield* redirectUriFor(binding.id));
   url.searchParams.set("scope", need.scopes.join(" "));
   url.searchParams.set("state", state);
-  // URLSearchParams encodes spaces as "+". HubSpot documents scopes joined by "%20".
+  // quirk: HubSpot documents scopes joined by "%20", but URLSearchParams encodes spaces as "+".
   url.search = url.searchParams.toString().replaceAll("+", "%20");
   return url.toString();
 });
@@ -175,8 +171,11 @@ export const connectApiKey = Effect.fnUntraced(function* (
 });
 
 /**
- * `credentials/get`. The callback token picks the install. An oauth2 result stays valid for at
- * least REFRESH_MARGIN, because the platform refreshes first when less remains.
+ * `credentials/get`: hand a connector credential's current value to the app (ADR 0009, ADR 0012).
+ * Tenants connect credentials, and the platform stores and refreshes them. The callback token picks
+ * the install. An oauth2 result stays valid for at least REFRESH_MARGIN, because the platform
+ * refreshes first when less remains. Concurrent calls share one refresh per connection, and a token
+ * refreshed under a client that changed meanwhile reads as missing.
  */
 export const getCredential = Effect.fnUntraced(function* (claims: CallbackClaims, name: string) {
   const { apps } = yield* Store;
@@ -196,7 +195,6 @@ export const getCredential = Effect.fnUntraced(function* (claims: CallbackClaims
 
   const stale = DateTime.isLessThanOrEqualTo(connection.expiresAt, DateTime.add(yield* DateTime.now, REFRESH_MARGIN));
   const fresh = stale ? yield* refresh(install, name, binding, connection) : connection;
-  // The client may have changed while the refresh ran. A grant of the old client reads as missing.
   if (!fresh || (stale && fresh.bindingRevision !== (yield* apps.get(install.appId)).oauthBindings.get(name)?.revision)) return yield* missing;
   return {
     type: "oauth2",
@@ -205,7 +203,6 @@ export const getCredential = Effect.fnUntraced(function* (claims: CallbackClaims
   } satisfies CredentialValue;
 });
 
-/** One refresh per connection revision at a time. Concurrent callers await the same Deferred. Null when the grant is gone. */
 const refresh = Effect.fnUntraced(function* (
   install: Install,
   name: string,
@@ -230,7 +227,6 @@ const refreshOnce = Effect.fnUntraced(function* (
   binding: OAuthBinding,
   connection: OAuthConnection,
 ) {
-  // Without a refresh token the connection ends at expiresAt.
   if (!connection.refreshToken) return (yield* DateTime.isPast(connection.expiresAt)) ? null : connection;
 
   const body = yield* tokenRequest(binding, {
@@ -241,7 +237,6 @@ const refreshOnce = Effect.fnUntraced(function* (
   return yield* (yield* Installs).replaceConnection(install.id, name, connection.revision, refreshed);
 });
 
-/** The current binding for an oauth2 credential, checked against the manifest's endpoints. */
 const oauthBinding = Effect.fnUntraced(function* (install: Install, name: string) {
   const need = install.version.manifest.needs.credentials?.[name];
   if (need?.type !== "oauth2") return yield* new NotFound({ message: `no oauth2 credential ${name}` });
@@ -256,18 +251,15 @@ const oauthBinding = Effect.fnUntraced(function* (install: Install, name: string
 const TOKEN_TIMEOUT = "10 seconds";
 const JsonObject = Schema.Record(Schema.String, Schema.Unknown);
 const TokenError = Schema.Struct({ error: Schema.String });
-/** RFC 6749 section 5.1. The other fields of the response are kept as `providerFields`. */
 const TokenFields = Schema.Struct({
   access_token: Schema.String,
   expires_in: Schema.Number,
   refresh_token: Schema.optionalKey(Schema.String),
 });
 
-/**
- * POST to the pinned token URL with the client credentials in the form body (client_secret_post).
- * Redirects are refused, so a redirect cannot carry the secret elsewhere. Answers the response body,
- * or "invalid_grant" when the provider refused the grant. Every other failure is ProviderFailed.
- */
+const neverFollowRedirectsWithTheSecret = Effect.provideService(FetchHttpClient.RequestInit, { redirect: "error" });
+const hideTraceFromProvider = Effect.provideService(HttpClient.TracerDisabledWhen, () => true);
+
 const tokenRequest = Effect.fnUntraced(function* (binding: OAuthBinding, params: Record<string, string>) {
   const client = yield* HttpClient.HttpClient;
   const response = yield* HttpClientRequest.post(binding.pinned.tokenUrl).pipe(
@@ -275,10 +267,8 @@ const tokenRequest = Effect.fnUntraced(function* (binding: OAuthBinding, params:
     HttpClientRequest.bodyUrlParams({ ...params, client_id: binding.clientId, client_secret: binding.clientSecret.reveal() }),
     client.execute,
     Effect.timeout(TOKEN_TIMEOUT),
-    Effect.provideService(FetchHttpClient.RequestInit, { redirect: "error" }),
-    // HttpClient's own span would record the URL and send a traceparent to a third party. This span
-    // records only the host (ADR 0016).
-    Effect.provideService(HttpClient.TracerDisabledWhen, () => true),
+    neverFollowRedirectsWithTheSecret,
+    hideTraceFromProvider,
     Effect.withSpan("oauth token", {
       kind: "client",
       attributes: { "server.address": new URL(binding.pinned.tokenUrl).host, "oauth.grant_type": params["grant_type"] },
@@ -297,7 +287,6 @@ const tokenRequest = Effect.fnUntraced(function* (binding: OAuthBinding, params:
   );
 });
 
-/** Parse a token response. Keeps the old refresh token when none is returned. */
 const toConnection = Effect.fnUntraced(function* (
   binding: OAuthBinding,
   body: Readonly<Record<string, unknown>>,
