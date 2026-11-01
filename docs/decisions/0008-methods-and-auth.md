@@ -1,6 +1,6 @@
 # 0008: Method set, invocation context and authentication
 
-Status: Accepted (2026-09-26)
+Status: Accepted (2026-09-26). The context rule is amended by [0016](0016-trace-metadata.md).
 
 ## Context
 

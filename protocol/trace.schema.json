@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://totem.dev/protocol/1/trace.schema.json",
+  "title": "Trace metadata",
+  "description": "Optional `trace` member of any JSON-RPC request, beside `params`. It is part of the signed body. A receiver ignores a missing or invalid value and never rejects a request because of it. It grants no access.",
+  "type": "object",
+  "required": ["traceparent"],
+  "additionalProperties": false,
+  "properties": {
+    "traceparent": {
+      "type": "string",
+      "pattern": "^00-(?!0{32}-)[0-9a-f]{32}-(?!0{16}-)[0-9a-f]{16}-[0-9a-f]{2}$",
+      "description": "W3C trace context, version 00 only. Lowercase hex, trace and span IDs not all zeros. The lowest flags bit is the sampling decision."
+    }
+  }
+}

@@ -1,4 +1,5 @@
-// Platform to app request signing. Header `X-Totem-Signature: t=<unix>,v1=<hex>`
+// Request signing with an app's registration secret: platform to app (ADR 0008), and app to
+// platform for `actions/start` (ADR 0014). Header `X-Totem-Signature: t=<unix>,v1=<hex>`
 // where v1 = HMAC-SHA256(secret, `${t}.${body}`).
 
 export const SIGNATURE_HEADER = "x-totem-signature";

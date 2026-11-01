@@ -4,13 +4,16 @@ import {
   RpcError,
   SIGNATURE_HEADER,
   isJsonRpcRequest,
+  parseTrace,
   verify,
   type AppMethods,
   type JsonRpcId,
   type JsonRpcResponse,
   type Manifest,
+  type TraceParent,
 } from "@totem/protocol";
-import type { AnyApp, App } from "./define-app.js";
+import type { AnyApp, App, Remote } from "./define-app.js";
+import { logFailure, type Observability } from "./observability.js";
 import { platformClient } from "./platform.js";
 
 type HandlerOptions = {
@@ -19,6 +22,7 @@ type HandlerOptions = {
   /** Known before `initialize` runs, for apps restarted after registration. */
   platformUrl?: string;
   fetch?: typeof fetch;
+  observability?: Observability;
 };
 
 /**
@@ -29,14 +33,18 @@ export function createHandler<M extends Manifest>(typedApp: App<M>, options: Han
   const app = typedApp as unknown as AnyApp;
   let platformUrl = options.platformUrl;
 
-  const platformFor = (token: string) => {
-    if (!platformUrl) {
-      throw new RpcError(ErrorCode.InvalidRequest, "platformUrl unknown; call initialize first");
-    }
-    return platformClient({ url: platformUrl, token, ...(options.fetch && { fetch: options.fetch }) });
+  const observability = options.observability ?? {};
+
+  /** Callbacks for one call, each naming the call's span in its `trace` member. */
+  const remoteFor = (token: string, parent: TraceParent | undefined): Remote => {
+    const url = platformUrl;
+    if (!url) throw new RpcError(ErrorCode.InvalidRequest, "platformUrl unknown; call initialize first");
+    return { parent, connect: (trace) => platformClient({ url, token, trace, ...(options.fetch && { fetch: options.fetch }) }) };
   };
 
-  const methods: { [K in keyof AppMethods]: (params: AppMethods[K]["params"]) => Promise<AppMethods[K]["result"]> } = {
+  const methods: {
+    [K in keyof AppMethods]: (params: AppMethods[K]["params"], parent: TraceParent | undefined) => Promise<AppMethods[K]["result"]>;
+  } = {
     async initialize({ protocolVersion, platformUrl: url }) {
       if (protocolVersion !== PROTOCOL_VERSION) {
         throw new RpcError(ErrorCode.ProtocolVersionUnsupported, `app speaks protocol ${PROTOCOL_VERSION}`);
@@ -49,23 +57,23 @@ export function createHandler<M extends Manifest>(typedApp: App<M>, options: Han
       return { status: "ok" };
     },
 
-    async install({ context, callbackToken }) {
+    async install({ context, callbackToken }, parent) {
       if (!app.handlers.install) throw new RpcError(ErrorCode.MethodNotFound, "install not implemented");
-      await app.install({ platform: platformFor(callbackToken), context });
+      await app.install({ remote: remoteFor(callbackToken, parent), context, observability });
       return {};
     },
 
-    async uninstall({ context, callbackToken }) {
+    async uninstall({ context, callbackToken }, parent) {
       if (!app.handlers.uninstall) throw new RpcError(ErrorCode.MethodNotFound, "uninstall not implemented");
-      await app.uninstall({ platform: platformFor(callbackToken), context });
+      await app.uninstall({ remote: remoteFor(callbackToken, parent), context, observability });
       return {};
     },
 
-    async "actions/invoke"({ action, input, context, callbackToken }) {
+    async "actions/invoke"({ action, input, context, callbackToken }, parent) {
       if (!(action in app.handlers.actions)) {
         throw new RpcError(ErrorCode.ActionNotFound, `unknown action "${action}"`);
       }
-      const output = await app.invoke(action, input, { platform: platformFor(callbackToken), context });
+      const output = await app.invoke(action, input, { remote: remoteFor(callbackToken, parent), context, observability });
       return { output };
     },
   };
@@ -94,11 +102,12 @@ export function createHandler<M extends Manifest>(typedApp: App<M>, options: Han
     }
 
     try {
-      const result = await methods[parsed.method](parsed.params as never);
+      // The signature has verified, so the trace member can be read (ADR 0016).
+      const result = await methods[parsed.method](parsed.params as never, parseTrace(parsed.trace));
       return reply(parsed.id, { result });
     } catch (error) {
       if (error instanceof RpcError) return reply(parsed.id, failure(error));
-      console.error(`[totem] ${parsed.method} failed`, error);
+      await logFailure(observability, `[totem] ${parsed.method} failed`, error);
       return reply(parsed.id, failure(new RpcError(ErrorCode.InternalError, "internal error")));
     }
   };

@@ -1,152 +1,279 @@
-import { RpcError } from "@totem/protocol";
-import { HttpError, authenticate, bearerToken, hashToken, type Principal } from "./access.js";
-import { PLATFORM_METHODS_PATH, createInstall, initializeApp, invokeAction, registerApp, setBinding } from "./apps.js";
-import { handleBrowser } from "./browser.js";
+import { AppId, InstallId, TenantId } from "@totem/ids";
+import type { InstallRepo } from "@totem/installs";
+import type { AppTransport } from "@totem/runtime";
+import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
+import { FetchHttpClient, Headers, HttpTraceContext, type HttpClient } from "effect/http";
+import { Principal, authorize, type ManagementAction } from "@totem/permissions";
+import { authenticate, authorizeInstall, bearerToken, hashToken } from "./access.js";
+import {
+  PLATFORM_METHODS_PATH,
+  createInstall,
+  initializeApp,
+  invokeAction,
+  registerApp,
+  setBinding,
+  setVisibility,
+  upgradeInstall,
+} from "./apps.js";
+import { appTransportLayer, installRepoLayer } from "./adapters.js";
+import { browserRoute, errorPage, handleBrowser } from "./browser.js";
 import { connectApiKey, setOAuthClient } from "./connections.js";
+import { BadRequest, type PlatformError } from "./errors.js";
 import { handlePlatformMethod } from "./platform-methods.js";
-import { createStore, type Context, type PortBinding } from "./store.js";
+import { PlatformConfig, Store } from "./store.js";
 
-// The HTTP shell. Routes parse the request and call one operation. Operations authorize themselves.
+// The HTTP shell. Routes decode the request, authorize it and call one operation with the proof.
+// This is the only place that maps domain failures to HTTP statuses.
 
-type PlatformOptions = {
+export type PlatformOptions = {
   /** The platform's public origin, such as `http://localhost:3000`. */
   baseUrl: string;
-  /** Management tokens and who holds them. */
-  principals: { token: string; principal: Principal }[];
+  /** Management tokens and who holds them. Decoded when the platform starts. */
+  principals: { token: string; principal: typeof Principal.Encoded }[];
   allowLocalhost?: boolean;
   fetch?: typeof fetch;
 };
 
-type Params = Record<string, string>;
+type Services = Store | PlatformConfig | HttpClient.HttpClient | AppTransport | InstallRepo;
+
+const NonEmpty = Schema.NonEmptyString;
+const PortBinding = Schema.Struct({ installId: InstallId, action: NonEmpty });
+const JsonObject = Schema.Record(Schema.String, Schema.Unknown);
+
+/**
+ * One management route: a path template such as `/api/apps/:appId`, the schemas its path params and
+ * body decode with, and the operation it runs.
+ */
 type Route = {
   method: string;
+  path: string;
   pattern: RegExp;
-  run: (ctx: Context, principal: Principal, params: Params, body: Record<string, unknown>) => Promise<unknown> | unknown;
+  run: (principal: Principal, params: Record<string, string>, body: unknown) => Effect.Effect<unknown, PlatformError, Services>;
 };
 
+function route<P extends Schema.Decoder<unknown>, S extends Schema.Decoder<unknown>>(
+  method: string,
+  path: string,
+  params: P,
+  body: S,
+  run: (principal: Principal, params: P["Type"], body: S["Type"]) => Effect.Effect<unknown, PlatformError, Services>,
+): Route {
+  const decodeParams = Schema.decodeUnknownEffect(params);
+  const decodeBody = Schema.decodeUnknownEffect(body);
+  return {
+    method,
+    path,
+    pattern: new RegExp(`^${path.replace(/:(\w+)/g, "(?<$1>[^/]+)")}$`),
+    run: (principal, rawParams, rawBody) =>
+      Effect.all([decodeParams(rawParams), decodeBody(rawBody)]).pipe(
+        Effect.mapError((error) => new BadRequest({ message: error.message })),
+        Effect.flatMap(([decodedParams, decodedBody]) => run(principal, decodedParams, decodedBody)),
+      ),
+  };
+}
+
+const NoParams = Schema.Struct({});
+
+/** Authorize an action that names no install. */
+const allowed = <A extends ManagementAction>(principal: Principal, action: A) => Effect.fromResult(authorize(principal, action));
+
 const routes: Route[] = [
-  {
-    method: "POST",
-    pattern: /^\/api\/apps$/,
-    run: (ctx, principal, _params, body) => registerApp(ctx, principal, string(body, "url")),
-  },
-  {
-    method: "POST",
-    pattern: /^\/api\/apps\/(?<appId>[^/]+)\/initialize$/,
-    run: async (ctx, principal, { appId }) => ({ manifest: await initializeApp(ctx, principal, appId!) }),
-  },
-  {
-    method: "PUT",
-    pattern: /^\/api\/apps\/(?<appId>[^/]+)\/oauth-clients\/(?<name>[^/]+)$/,
-    run: (ctx, principal, { appId, name }, body) =>
-      setOAuthClient(ctx, principal, appId!, name!, {
-        clientId: string(body, "clientId"),
-        clientSecret: string(body, "clientSecret"),
-      }),
-  },
-  {
-    method: "POST",
-    pattern: /^\/api\/tenants\/(?<tenantId>[^/]+)\/installs$/,
-    run: async (ctx, principal, { tenantId }, body) => {
-      const bindings = Object.fromEntries(
-        Object.entries(object(body, "bindings")).map(([port, value]) => [port, portBinding(value, `bindings.${port}`)]),
-      );
-      const install = await createInstall(ctx, principal, tenantId!, string(body, "appId"), object(body, "config"), bindings);
-      return { installId: install.id };
-    },
-  },
-  {
-    method: "PUT",
-    pattern: /^\/api\/installs\/(?<installId>[^/]+)\/bindings\/(?<port>[^/]+)$/,
-    run: (ctx, principal, { installId, port }, body) => {
-      setBinding(ctx, principal, installId!, port!, portBinding(body, "body"));
-      return {};
-    },
-  },
-  {
-    method: "PUT",
-    pattern: /^\/api\/installs\/(?<installId>[^/]+)\/connections\/(?<name>[^/]+)\/api-key$/,
-    run: (ctx, principal, { installId, name }, body) => {
-      connectApiKey(ctx, principal, installId!, name!, string(body, "key"));
-      return {};
-    },
-  },
-  {
-    method: "POST",
-    pattern: /^\/api\/installs\/(?<installId>[^/]+)\/actions\/(?<action>[^/]+)$/,
-    run: async (ctx, principal, { installId, action }, body) => ({
-      output: await invokeAction(ctx, principal, installId!, action!, body["input"] ?? {}),
+  route("POST", "/api/apps", NoParams, Schema.Struct({ url: NonEmpty }), (principal, _, { url }) =>
+    Effect.flatMap(allowed(principal, { type: "app.register" }), (auth) => registerApp(auth, url)),
+  ),
+  route("POST", "/api/apps/:appId/initialize", Schema.Struct({ appId: AppId }), Schema.Unknown, (principal, { appId }) =>
+    allowed(principal, { type: "app.register" }).pipe(
+      Effect.flatMap((auth) => initializeApp(auth, appId)),
+      Effect.map((manifest) => ({ manifest })),
+    ),
+  ),
+  route(
+    "PUT",
+    "/api/apps/:appId/visibility",
+    Schema.Struct({ appId: AppId }),
+    Schema.Struct({ visibility: Schema.Literals(["public", "internal"]) }),
+    (principal, { appId }, { visibility }) =>
+      allowed(principal, { type: "app.setVisibility" }).pipe(
+        Effect.flatMap((auth) => setVisibility(auth, appId, visibility)),
+        Effect.as({}),
+      ),
+  ),
+  route(
+    "PUT",
+    "/api/apps/:appId/oauth-clients/:name",
+    Schema.Struct({ appId: AppId, name: NonEmpty }),
+    Schema.Struct({ clientId: NonEmpty, clientSecret: NonEmpty }),
+    (principal, { appId, name }, client) =>
+      Effect.flatMap(allowed(principal, { type: "app.setOAuthClient" }), (auth) => setOAuthClient(auth, appId, name, client)),
+  ),
+  route(
+    "POST",
+    "/api/tenants/:tenantId/installs",
+    Schema.Struct({ tenantId: TenantId }),
+    Schema.Struct({
+      appId: AppId,
+      config: Schema.optionalKey(JsonObject),
+      bindings: Schema.optionalKey(Schema.Record(Schema.String, PortBinding)),
     }),
-  },
+    (principal, { tenantId }, { appId, config = {}, bindings = {} }) =>
+      allowed(principal, { type: "install.create", tenantId }).pipe(
+        Effect.flatMap((auth) => createInstall(auth, appId, config, bindings)),
+        Effect.map((install) => ({ installId: install.id })),
+      ),
+  ),
+  route(
+    "PUT",
+    "/api/installs/:installId/bindings/:port",
+    Schema.Struct({ installId: InstallId, port: NonEmpty }),
+    PortBinding,
+    (principal, { installId, port }, binding) =>
+      authorizeInstall(principal, installId, "install.bind").pipe(
+        Effect.flatMap((auth) => setBinding(auth, port, binding)),
+        Effect.as({}),
+      ),
+  ),
+  route(
+    "PUT",
+    "/api/installs/:installId/connections/:name/api-key",
+    Schema.Struct({ installId: InstallId, name: NonEmpty }),
+    Schema.Struct({ key: NonEmpty }),
+    (principal, { installId, name }, { key }) =>
+      authorizeInstall(principal, installId, "install.connect").pipe(
+        Effect.flatMap((auth) => connectApiKey(auth, name, key)),
+        Effect.as({}),
+      ),
+  ),
+  route(
+    "POST",
+    "/api/installs/:installId/upgrade",
+    Schema.Struct({ installId: InstallId }),
+    Schema.Unknown,
+    (principal, { installId }) =>
+      authorizeInstall(principal, installId, "install.upgrade").pipe(
+        Effect.flatMap(upgradeInstall),
+        Effect.map((version) => ({ versionId: version.id, version: version.manifest.version })),
+      ),
+  ),
+  route(
+    "POST",
+    "/api/installs/:installId/actions/:action",
+    Schema.Struct({ installId: InstallId, action: NonEmpty }),
+    Schema.Struct({ input: Schema.optionalKey(Schema.Unknown) }),
+    (principal, { installId, action }, { input = {} }) =>
+      authorizeInstall(principal, installId, "install.invoke").pipe(
+        Effect.flatMap((auth) => invokeAction(auth, action, input)),
+        Effect.map((output) => ({ output })),
+      ),
+  ),
 ];
 
-/** Build the platform. `handle` serves the management API, the browser pages and the platform-methods endpoint. */
-export function createPlatform({ baseUrl, principals, allowLocalhost = false, fetch: doFetch = fetch }: PlatformOptions) {
-  const store = createStore(new Map(principals.map(({ token, principal }) => [hashToken(token), principal])));
-  const ctx: Context = { store, baseUrl, allowLocalhost, fetch: doFetch };
-
-  async function handle(request: Request): Promise<Response> {
-    const { pathname } = new URL(request.url);
-    if (request.method === "POST" && pathname === PLATFORM_METHODS_PATH) return handlePlatformMethod(ctx, request);
-    if (!pathname.startsWith("/api/")) return handleBrowser(ctx, request);
-
-    for (const route of routes) {
-      const match = route.method === request.method ? route.pattern.exec(pathname) : null;
-      if (!match) continue;
-      try {
-        const principal = authenticate(store, bearerToken(request));
-        if (!principal) throw new HttpError(401, "missing or unknown management token");
-        const body = request.method === "GET" ? {} : await readJson(request);
-        return Response.json(await route.run(ctx, principal, match.groups ?? {}, body));
-      } catch (error) {
-        return errorResponse(error);
-      }
-    }
-    return Response.json({ error: `no route for ${request.method} ${pathname}` }, { status: 404 });
-  }
-
-  return { handle, ctx };
-}
-
-function errorResponse(error: unknown): Response {
-  if (error instanceof HttpError) return Response.json({ error: error.message }, { status: error.status });
+/** The HTTP status for each domain failure. */
+const STATUS: { [K in PlatformError["_tag"]]: number } = {
+  Unauthenticated: 401,
+  Forbidden: 403,
+  NotFound: 404,
+  Conflict: 409,
+  BadRequest: 400,
+  NotDeclared: 422,
+  PortNotDeclared: 422,
+  ActionNotProvided: 422,
+  ForeignInstall: 403,
+  InstallNotActive: 409,
+  IllegalTransition: 409,
+  IncompatibleVersion: 409,
+  PortUnbound: 422,
+  CallDepthExceeded: 422,
+  CredentialMissing: 422,
+  InvalidManifest: 422,
+  ProviderFailed: 502,
   // A JSON-RPC error from an app: a failed action or a protocol error. The body keeps its code and data.
-  if (error instanceof RpcError) return Response.json({ error: error.toJSON() }, { status: 422 });
-  console.error("[totem] request failed", error);
-  return Response.json({ error: "internal error" }, { status: 500 });
+  AppFailed: 422,
+};
+
+function errorResponse(error: PlatformError): Response {
+  const body =
+    error._tag === "AppFailed"
+      ? { error: { code: error.code, message: error.message, ...(error.data !== undefined && { data: error.data }) } }
+      : { error: error.message };
+  return Response.json(body, { status: STATUS[error._tag] });
 }
 
-async function readJson(request: Request): Promise<Record<string, unknown>> {
-  const text = await request.text();
-  if (text === "") return {};
-  try {
-    const value: unknown = JSON.parse(text);
-    if (isObject(value)) return value;
-  } catch {
-    // Falls through to the 400 below.
+const handleApi = Effect.fnUntraced(function* (request: Request, pathname: string) {
+  for (const route of routes) {
+    const match = route.method === request.method ? route.pattern.exec(pathname) : null;
+    if (!match) continue;
+    const principal = yield* authenticate(bearerToken(request));
+    const body = request.method === "GET" ? {} : yield* readJson(request);
+    // The principal has authenticated, so the caller's W3C traceparent header can be the parent (ADR 0016).
+    const parent = HttpTraceContext.fromHeaders(Headers.fromInput(request.headers));
+    const run = route.run(principal, match.groups ?? {}, body).pipe(
+      Effect.withSpan(`${route.method} ${route.path}`, {
+        kind: "server",
+        attributes: { "http.route": route.path, "totem.principal": principal.id },
+        ...(Option.isSome(parent) && { parent: parent.value }),
+      }),
+    );
+    return Response.json(yield* run);
   }
-  throw new HttpError(400, "body must be a JSON object");
+  return Response.json({ error: `no route for ${request.method} ${pathname}` }, { status: 404 });
+});
+
+/** Route one request to the management API, the platform-methods endpoint or the browser pages. */
+const handleRequest = (request: Request): Effect.Effect<Response, never, Services> => {
+  const { pathname } = new URL(request.url);
+  const handled: Effect.Effect<Response, PlatformError, Services> =
+    request.method === "POST" && pathname === PLATFORM_METHODS_PATH
+      ? handlePlatformMethod(request)
+      : pathname.startsWith("/api/")
+        ? handleApi(request, pathname).pipe(Effect.catch((error) => Effect.succeed(errorResponse(error))))
+        : handleBrowser(request).pipe(
+            Effect.catch((error) => Effect.succeed(errorPage(STATUS[error._tag], error.message))),
+            // Public pages, so a trace header from the browser is never continued.
+            Effect.withSpan(`${request.method} ${browserRoute(pathname)}`, { kind: "server", root: true }),
+          );
+  return handled.pipe(
+    Effect.catchCause((cause) =>
+      Effect.logError("request failed", cause).pipe(
+        Effect.as(Response.json({ error: "internal error" }, { status: 500 })),
+      ),
+    ),
+  );
+};
+
+/** The services every operation runs with. `fetch` reaches apps, and OAuth providers through HttpClient. */
+export function platformLayer({ baseUrl, principals, allowLocalhost = false, fetch }: PlatformOptions) {
+  const store = Store.layer(new Map(principals.map(({ token, principal }) => [hashToken(token), Schema.decodeUnknownSync(Principal)(principal)])));
+  return Layer.mergeAll(
+    Layer.provideMerge(Layer.mergeAll(installRepoLayer, appTransportLayer), store),
+    Layer.succeed(PlatformConfig, { baseUrl, allowLocalhost }),
+    FetchHttpClient.layer,
+    fetch ? Layer.succeed(FetchHttpClient.Fetch, fetch) : Layer.empty,
+  );
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+/**
+ * Build the platform. `handle` serves the management API, the browser pages and the platform-methods
+ * endpoint. `layer` adds or replaces services, such as a TestClock. `runtime` runs effects against
+ * the same services, which tests use to drive the clock.
+ */
+export function createPlatform<R = never>(options: PlatformOptions, layer: Layer.Layer<R> = Layer.empty as Layer.Layer<R>) {
+  const runtime = ManagedRuntime.make(Layer.merge(platformLayer(options), layer));
+  // eslint-disable-next-line no-restricted-syntax -- the fetch-style handler servers call
+  const handle = (request: Request): Promise<Response> => runtime.runPromise(handleRequest(request));
+  return { handle, runtime };
 }
 
-/** An optional JSON object field. Missing means `{}`. */
-function object(body: Record<string, unknown>, field: string): Record<string, unknown> {
-  const value = body[field] ?? {};
-  if (!isObject(value)) throw new HttpError(400, `${field} must be a JSON object`);
-  return value;
-}
-
-/** `{ installId, action }`, both non-empty strings. */
-function portBinding(value: unknown, field: string): PortBinding {
-  if (!isObject(value)) throw new HttpError(400, `${field} must be { installId, action }`);
-  return { installId: string(value, "installId"), action: string(value, "action") };
-}
-
-function string(body: Record<string, unknown>, field: string): string {
-  const value = body[field];
-  if (typeof value !== "string" || value === "") throw new HttpError(400, `${field} is required`);
-  return value;
-}
+const readJson = (request: Request) =>
+  Effect.tryPromise({
+    // eslint-disable-next-line no-restricted-syntax -- Request.text() is a Promise
+    try: async () => {
+      const text = await request.text();
+      return text === "" ? {} : (JSON.parse(text) as unknown);
+    },
+    catch: () => new BadRequest({ message: "body must be a JSON object" }),
+  }).pipe(
+    Effect.filterOrFail(
+      (body) => typeof body === "object" && body !== null && !Array.isArray(body),
+      () => new BadRequest({ message: "body must be a JSON object" }),
+    ),
+  );

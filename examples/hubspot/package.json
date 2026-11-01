@@ -12,13 +12,15 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
     "test": "vitest run",
     "dev": "node --watch dist/server.js",
     "hs:upload": "cd totem-test && hs project upload",
     "live": "node --env-file-if-exists=.env.local dist/live.js"
   },
   "dependencies": {
-    "@totem/sdk": "workspace:*"
+    "@totem/sdk": "workspace:*",
+    "effect": "^4.0.6"
   },
   "devDependencies": {
     "@totem/platform": "workspace:*",

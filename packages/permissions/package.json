@@ -2,5 +2,27 @@
   "name": "@totem/permissions",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run src"
+  },
+  "dependencies": {
+    "@totem/ids": "workspace:*",
+    "@totem/installs": "workspace:*",
+    "effect": "^4.0.6"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.2"
+  }
 }

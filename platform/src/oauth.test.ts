@@ -1,5 +1,8 @@
+import { AppId } from "@totem/ids";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { defineApp, type Manifest } from "@totem/sdk";
+import { ErrorCode } from "@totem/protocol";
+import { appClient, defineApp, type Manifest } from "@totem/sdk";
+import { Store } from "./store.js";
 import { PLATFORM, testPlatform } from "./test-network.js";
 
 // The platform runs generic OAuth 2.0 (ADR 0012), so these tests use a made-up provider. The app
@@ -49,6 +52,8 @@ function fakeProvider({ expiresIn = 1800 } = {}) {
   const accessTokens = new Set<string>();
   const refreshTokens = new Set<string>();
   const tokenRequests: Record<string, string>[] = [];
+  /** The traceparent header of each token request. */
+  const traceHeaders: (string | null)[] = [];
   let issued = 0;
   let hold: Promise<void> | null = null;
 
@@ -64,6 +69,7 @@ function fakeProvider({ expiresIn = 1800 } = {}) {
     if (request.url === "https://crm.test/oauth/token") {
       const form = Object.fromEntries(new URLSearchParams(await request.text()));
       tokenRequests.push(form);
+      traceHeaders.push(request.headers.get("traceparent"));
       if (form["grant_type"] === "authorization_code") {
         if (!codes.delete(form["code"]!)) return Response.json({ error: "invalid_grant" }, { status: 400 });
         return issue();
@@ -82,6 +88,7 @@ function fakeProvider({ expiresIn = 1800 } = {}) {
 
   return {
     tokenRequests,
+    traceHeaders,
     /** The provider's consent screen: the user approves and the provider issues a code for the redirect. */
     consent(authorizeUrl: string) {
       const params = new URL(authorizeUrl).searchParams;
@@ -170,6 +177,12 @@ describe("OAuth connect", () => {
     expect(await whoami()).toEqual({ status: 200, body: { output: { account: "acme-crm" } } });
   });
 
+  it("sends no trace context to the provider", async () => {
+    const { provider, connect } = await setup();
+    expect((await connect()).status).toBe(200);
+    expect(provider.traceHeaders).toEqual([null]);
+  });
+
   it("refuses a callback from a browser that did not start the connect", async () => {
     const { browser, installId, alice, provider, whoami } = await setup();
     const authorizeUrl = (await alice.connect(installId, "crm")).headers.get("location")!;
@@ -224,6 +237,72 @@ describe("OAuth connect", () => {
 
     const connected = await connect();
     expect(connected.status).toBe(200);
+  });
+});
+
+describe("expiry", () => {
+  it("ends a browser session after 12 hours", async () => {
+    const { alice, installId, advance } = await setup();
+    const page = `/installs/${installId}/connect/crm`;
+    expect((await alice.get(page)).status).toBe(200);
+
+    await advance("12 hours");
+    const expired = await alice.get(page);
+    expect(expired.status).toBe(303);
+    expect(expired.headers.get("location")).toBe(`/signin?next=${encodeURIComponent(page)}`);
+  });
+
+  it("refuses a callback for a connect started more than 10 minutes ago", async () => {
+    const { installId, alice, provider, advance } = await setup();
+    const callbackPath = provider.consent((await alice.connect(installId, "crm")).headers.get("location")!);
+
+    await advance("10 minutes");
+    expect((await alice.get(callbackPath)).status).toBe(400);
+    expect(provider.tokenRequests).toEqual([]);
+  });
+});
+
+/** A consumer whose `whoami` port reaches the CRM app, as the events app reaches HubSpot. */
+const consumer = defineApp(
+  {
+    name: "consumer",
+    version: "0.1.0",
+    protocol: "1",
+    provides: { actions: { who: manifest.provides.actions.whoami } },
+    needs: { actions: { whoami: manifest.provides.actions.whoami } },
+  } as const satisfies Manifest,
+  { actions: { who: async (input, ctx) => ctx.ports.whoami(input) } },
+);
+
+describe("ports/connect", () => {
+  async function connectSetup() {
+    const env = await setup();
+    await env.api("op", "PUT", `/api/apps/${env.appId}/visibility`, { visibility: "public" });
+    const own = await env.install({ other: consumer });
+    const client = appClient(consumer, { secret: env.secrets.get(own.appId)!, platformUrl: `${PLATFORM}/rpc`, fetch: env.network });
+    await client.bind(own.installId, "whoami", { appId: env.appId, action: "whoami" });
+    const app = await env.platform.runtime.runPromise(Store.use(({ apps }) => apps.get(AppId.make(own.appId))));
+    const origin = new URL(app.url).origin;
+    return { ...env, own, client, origin };
+  }
+
+  it("connects the bound provider without a platform session and returns to the app", async () => {
+    const { client, own, origin, provider, platform } = await connectSetup();
+    expect((await client.ports(own.installId)).whoami?.credentials).toEqual({ crm: { type: "oauth2", connected: false } });
+
+    const url = await client.connect(own.installId, "whoami", "crm", `${origin}/integrations`);
+    const callback = await platform.handle(new Request(PLATFORM + provider.consent(url)));
+
+    expect(callback.headers.get("location")).toBe(`${origin}/integrations`);
+    expect((await client.ports(own.installId)).whoami?.credentials).toEqual({ crm: { type: "oauth2", connected: true } });
+    expect(await client.start(own.installId, "who", {})).toEqual({ account: "acme-crm" });
+  });
+
+  it("refuses a returnTo off the app's origin", async () => {
+    const { client, own } = await connectSetup();
+    await expect(client.connect(own.installId, "whoami", "crm", "https://evil.test/")).rejects.toMatchObject({
+      code: ErrorCode.InvalidParams,
+    });
   });
 });
 
@@ -287,6 +366,19 @@ describe("OAuth client changes", () => {
     await api("op", "PUT", `/api/apps/${appId}/oauth-clients/crm`, { clientId: "other-client", clientSecret: "s" });
     expect((await whoami()).body).toMatchObject({ error: { code: -32002 } });
     expect(provider.tokenRequests).toHaveLength(requestsBefore);
+  });
+
+  it("does not hand out a token refreshed under a client that changed meanwhile", async () => {
+    const { api, appId, connect, whoami, provider } = await setup({ expiresIn: 60 });
+    await connect();
+    const release = provider.holdRefresh();
+
+    const pending = whoami();
+    await vi.waitFor(() => expect(provider.tokenRequests).toHaveLength(2));
+    await api("op", "PUT", `/api/apps/${appId}/oauth-clients/crm`, { clientId: "other-client", clientSecret: "s" });
+    release();
+
+    expect((await pending).body).toMatchObject({ error: { code: -32002 } });
   });
 
   it("does not revive old grants when the original client is set again", async () => {

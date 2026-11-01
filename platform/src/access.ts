@@ -1,42 +1,21 @@
 import { createHash } from "node:crypto";
-import { randomToken, type Install, type Store } from "./store.js";
+import type { InstallId } from "@totem/ids";
+import { authorize, type InstallActionType, type Principal } from "@totem/permissions";
+import { DateTime, Effect } from "effect";
+import { Unauthenticated } from "./errors.js";
+import { Store, randomToken, type Install } from "./store.js";
 
 // Platform access (ADR 0011). Only the management API uses it. Apps never see a principal.
 
-export type Role = { name: "operator" } | { name: "tenantAdmin"; tenantId: string };
-
-/** The holder of a management token: a person or a CI job. `id` names it in logs. */
-export type Principal = { id: string; role: Role };
-
-/**
- * Every management action. Install-scoped actions carry the stored install, so the tenant that
- * `can` compares comes from the store, never from the request.
- */
-export type ManagementAction =
-  | { type: "app.register" }
-  | { type: "app.setOAuthClient" }
-  | { type: "install.create"; tenantId: string }
-  | { type: "install.connect"; install: Install }
-  | { type: "install.bind"; install: Install }
-  | { type: "install.invoke"; install: Install };
+/** An install-scoped action on a stored install. */
+export type InstallAction<T extends InstallActionType> = { readonly type: T; readonly install: Install };
 
 /**
  * A browser signed in with a management token. OAuth consent needs it, because the provider
  * redirect is a plain browser GET and the platform must know that the browser finishing a connect
  * is the one that started it (RFC 6749 section 10.12).
  */
-export type Session = { id: string; principal: Principal; expiresAt: Date };
-
-/** A management error with its HTTP status. Routes turn it into a JSON response. */
-export class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-    this.name = "HttpError";
-  }
-}
+export type Session = { id: string; principal: Principal; expiresAt: DateTime.Utc };
 
 /** The token in an `Authorization: Bearer` header, or an empty string. */
 export function bearerToken(request: Request): string {
@@ -47,52 +26,35 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-/** Resolve a management token. Null means 401. */
-export function authenticate(store: Store, token: string): Principal | null {
-  return store.apiTokens.get(hashToken(token)) ?? null;
-}
+/** Resolve a management token to its principal. */
+export const authenticate = Effect.fnUntraced(function* (token: string) {
+  const principal = (yield* Store).apiTokens.get(hashToken(token));
+  if (!principal) return yield* new Unauthenticated({ message: "missing or unknown management token" });
+  return principal;
+});
 
-/**
- * The only authorization rule. Every management function calls it before it acts. Custom roles,
- * audit and approvals later change this function, not its callers.
- */
-export function can({ role }: Principal, action: ManagementAction): boolean {
-  if (role.name === "operator") return true;
-  switch (action.type) {
-    case "app.register":
-    case "app.setOAuthClient":
-      return false;
-    case "install.create":
-      return action.tenantId === role.tenantId;
-    case "install.connect":
-    case "install.bind":
-    case "install.invoke":
-      return action.install.tenantId === role.tenantId;
-  }
-}
+/** Load an install and authorize an install-scoped action on it. */
+export const authorizeInstall = <T extends InstallActionType>(principal: Principal, installId: InstallId, type: T) =>
+  Store.use(({ installs }) => installs.get(installId)).pipe(
+    Effect.flatMap((install) => Effect.fromResult(authorize<InstallAction<T>>(principal, { type, install }))),
+  );
 
-/** `can`, or a 403. */
-export function authorize(principal: Principal, action: ManagementAction): void {
-  if (!can(principal, action)) throw new HttpError(403, `${principal.id} may not ${action.type}`);
-}
-
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const SESSION_TTL = { hours: 12 };
 
 /** Exchange a management token for a browser session. The development login until an IdP exists. */
-export function signIn(store: Store, token: string): Session | null {
-  const principal = authenticate(store, token);
-  if (!principal) return null;
-  const session: Session = { id: randomToken(), principal, expiresAt: new Date(Date.now() + SESSION_TTL_MS) };
-  store.sessions.set(session.id, session);
+export const signIn = Effect.fnUntraced(function* (token: string) {
+  const principal = yield* authenticate(token);
+  const session: Session = { id: randomToken(), principal, expiresAt: DateTime.add(yield* DateTime.now, SESSION_TTL) };
+  yield* (yield* Store).sessions.put(session);
   return session;
-}
+});
 
 /** The live session a cookie names, or null. */
-export function sessionFor(store: Store, id: string | undefined): Session | null {
-  const session = id ? store.sessions.get(id) : undefined;
-  if (!session || session.expiresAt.getTime() <= Date.now()) return null;
+export const sessionFor = Effect.fnUntraced(function* (id: string | undefined) {
+  const session = id ? yield* (yield* Store).sessions.lookup(id) : undefined;
+  if (!session || DateTime.isLessThanOrEqualTo(session.expiresAt, yield* DateTime.now)) return null;
   return session;
-}
+});
 
 /** Forms that change state with a session cookie carry this, so other sites cannot submit them. */
 export function csrfToken(session: Session): string {
