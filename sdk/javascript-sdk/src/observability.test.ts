@@ -53,12 +53,11 @@ const context = { tenantId: "t1", installId: "i1", config: {}, callId: "c1" };
 describe("observability", () => {
   it("continues the platform's trace and names the action span on every callback", async () => {
     const { runtime, named } = recording();
+    const platform = fakePlatform(app, { ports: { shout: async ({ text }) => ({ text: text.toUpperCase() }) } });
     const callbacks: JsonRpcRequest[] = [];
-    const fetch: typeof globalThis.fetch = async (_url, init) => {
-      const request = JSON.parse(String(init?.body)) as JsonRpcRequest;
-      callbacks.push(request);
-      const result = request.method === "actions/invoke" ? { output: { text: "HI" } } : {};
-      return Response.json({ jsonrpc: "2.0", id: request.id, result });
+    const fetch: typeof globalThis.fetch = async (url, init) => {
+      callbacks.push(JSON.parse(String(init?.body)) as JsonRpcRequest);
+      return platform.fetch(url, init);
     };
     const handle = createHandler(app, { secret: "s", platformUrl: "http://platform.test/rpc", fetch, observability: { runtime } });
 

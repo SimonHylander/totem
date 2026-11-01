@@ -1,6 +1,6 @@
 export { defineApp, type App } from "./define-app.js";
 export type { Handlers, CallCtx, InstallCtx, Ports } from "./types.js";
-export { type Platform, platformClient } from "./platform.js";
+export type { Platform } from "./platform.js";
 export { fakePlatform, type FakePlatform } from "./fake-platform.js";
 export { createHandler } from "./handler.js";
 export { appClient } from "./app-client.js";

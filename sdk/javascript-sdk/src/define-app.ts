@@ -66,12 +66,12 @@ function installCtx(manifest: Manifest, platform: Platform, log: Log, context: I
     tenantId: context.tenantId,
     installId: context.installId,
     config: context.config,
-    credentials: { get: (name) => platform.getCredential(name) },
+    credentials: { get: (name) => platform.call("credentials/get", { name }) },
     log: { debug: at("debug"), info: at("info"), warn: at("warn"), error: at("error") },
     ...(manifest.needs.state && {
       state: {
-        get: (key: string) => platform.getState(key),
-        set: (key: string, value: unknown) => platform.setState(key, value),
+        get: (key: string) => platform.call("state/get", { key }).then((r) => r.value),
+        set: (key: string, value: unknown) => platform.call("state/set", { key, value }).then(() => undefined),
       },
     }),
   };
@@ -79,7 +79,7 @@ function installCtx(manifest: Manifest, platform: Platform, log: Log, context: I
 
 function callCtx(manifest: Manifest, platform: Platform, log: Log, context: CallContext): CallCtx<Manifest> {
   const ports: Ports<Manifest> = Object.fromEntries(
-    Object.keys(manifest.needs.actions ?? {}).map((port) => [port, (input: unknown) => platform.invokePort(port, input)]),
+    Object.keys(manifest.needs.actions ?? {}).map((port) => [port, (input: unknown) => platform.call("actions/invoke", { port, input }).then((r) => r.output)]),
   );
   return {
     ...installCtx(manifest, platform, log, context),

@@ -1,4 +1,4 @@
-import { formatTrace, type LogLevel, type TraceMetadata, type TraceParent } from "@totem/protocol";
+import { formatTrace, type LogLevel, type PlatformMethods, type TraceMetadata, type TraceParent } from "@totem/protocol";
 import { Effect, type ManagedRuntime, Tracer } from "effect";
 import type { Platform } from "./platform.js";
 
@@ -51,12 +51,13 @@ export function runCall<A>(
         const platform = connect(formatTrace(span));
         const client = <B>(name: string, call: () => Promise<B>) =>
           run(Effect.tryPromise({ try: call, catch: (error) => error }).pipe(Effect.withSpan(name, { kind: "client", parent: span })));
+        // Every method but `log` is a client span. A port call is named after its port.
         const traced: Platform = {
-          getCredential: (name) => client("credentials/get", () => platform.getCredential(name)),
-          getState: (key) => client("state/get", () => platform.getState(key)),
-          setState: (key, value) => client("state/set", () => platform.setState(key, value)),
-          log: (level, message, data) => platform.log(level, message, data),
-          invokePort: (port, input) => client(`port ${port}`, () => platform.invokePort(port, input)),
+          call: (method, params) => {
+            if (method === "log") return platform.call(method, params);
+            const named: PlatformMethods[keyof PlatformMethods]["params"] = params;
+            return client("port" in named ? `port ${named.port}` : method, () => platform.call(method, params));
+          },
         };
         const destination = observability.logs ?? "platform";
         const log = async (level: LogLevel, message: string, data?: Record<string, unknown>) => {
@@ -68,7 +69,7 @@ export function runCall<A>(
               ),
             );
           }
-          if (destination !== "local") await platform.log(level, message, data);
+          if (destination !== "local") await platform.call("log", { level, message, data });
         };
         return Effect.tryPromise({ try: () => work(traced, log), catch: (error) => error });
       },
