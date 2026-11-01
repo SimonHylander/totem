@@ -1,8 +1,8 @@
 ---
 version: 1
 slug: "src-routes-events-eventid-tsx"
-primary_target: "src/routes/events.$eventId.tsx"
-related_targets: ["src/routes/index.tsx"]
+primary_target: "src/features/registration/RegistrationPage.tsx"
+related_targets: ["src/features/events/EventList.tsx"]
 ---
 
 # Attendee registration
