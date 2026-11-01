@@ -9,7 +9,6 @@ import { checkBinding, requireActive, transition, withBinding } from "./transiti
 const statuses: InstallStatus[] = [Pending.make({}), Active.make({})];
 const events: InstallEvent[] = [HookSucceeded.make({})];
 
-/** Every (status, event) pair and the status it leads to, or null when it is illegal. */
 const table: [InstallStatus, InstallEvent, InstallStatus["_tag"] | null][] = [
   [Pending.make({}), HookSucceeded.make({}), "Active"],
   [Active.make({}), HookSucceeded.make({}), null],
@@ -23,7 +22,6 @@ const manifest = (needs: string[], provides: string[]): Manifest => ({
   needs: { actions: Object.fromEntries(needs.map((port) => [port, { input: {}, output: {} }])) },
 });
 
-/** An Active install of acme running `app` with `appManifest`. */
 const install = (overrides: Partial<InstallCore> = {}, appManifest = manifest([], [])): InstallCore => ({
   id: InstallId.make("consumer"),
   tenantId: TenantId.make("acme"),

@@ -14,7 +14,6 @@ const base: Manifest = {
   config: { type: "object" },
 };
 
-/** `base` with `change` applied, and how compare classifies it. */
 const cases: [string, (m: Manifest) => Manifest, ReturnType<typeof compare>][] = [
   ["no change", (m) => m, { _tag: "Patch" }],
   ["new version and description", (m) => ({ ...m, version: "1.0.1", description: "CRM" }), { _tag: "Patch" }],

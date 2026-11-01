@@ -2,9 +2,7 @@ import type { AppId, VersionId } from "@totem/ids";
 import type { Manifest } from "@totem/protocol";
 import { type DateTime, Schema } from "effect";
 
-// App versions (ADR 0017). Every manifest an app returns from `initialize` is kept as an immutable
-// version, and each install pins one.
-
+/** An immutable copy of a manifest an app returned from `initialize` (ADR 0017). Each install pins one. */
 export type AppVersion = {
   readonly id: VersionId;
   readonly appId: AppId;

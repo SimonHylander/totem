@@ -25,7 +25,6 @@ const foreign: InstallCore = { ...install, tenantId: TenantId.make("globex") };
 const operator: Principal = { id: "simon", role: { name: "operator" } };
 const admin: Principal = { id: "alice", role: { name: "tenantAdmin", tenantId: acme } };
 
-/** Every action, with whether a tenant admin of acme may perform it. Operators may perform all of them. */
 const table: [ManagementAction, boolean][] = [
   [{ type: "app.register" }, false],
   [{ type: "app.setOAuthClient" }, false],
