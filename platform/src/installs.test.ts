@@ -39,6 +39,16 @@ describe("Installs", () => {
     expect(outcome).toEqual({ error: "ForeignInstall", stored: 1 });
   });
 
+  it("fails an undeclared port before a missing provider", async () => {
+    const error = await run(
+      Effect.gen(function* () {
+        const installs = yield* Installs;
+        return yield* Effect.flip(installs.create(acme, events, {}, { quiet: { installId: InstallId.make("gone"), action: "upsert" } }));
+      }),
+    );
+    expect(error._tag).toBe("PortNotDeclared");
+  });
+
   it("shares one provider per tenant and app, and creates none for a version it refuses", async () => {
     const outcome = await run(
       Effect.gen(function* () {

@@ -4,7 +4,6 @@ import { testPlatform } from "./test-network.js";
 
 const text = { type: "object", required: ["text"], properties: { text: { type: "string" } } } as const;
 
-/** The provider: shouts text back, or fails with an app error. */
 const shouter = defineApp(
   {
     name: "shouter",
@@ -23,7 +22,6 @@ const shouter = defineApp(
   },
 );
 
-/** The consumer: calls whatever its `loud` port is bound to. */
 const caller = defineApp(
   {
     name: "caller",
@@ -35,7 +33,6 @@ const caller = defineApp(
   { actions: { run: async (input, ctx) => ctx.ports.loud(input) } },
 );
 
-/** Binds its own port to itself, so every call recurses. */
 const looper = defineApp(
   {
     name: "looper",

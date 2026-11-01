@@ -8,11 +8,11 @@ import { BadRequest, PortUnbound } from "./errors.js";
 import { Installs, type Install } from "./installs.js";
 import { Store } from "./store.js";
 
-// The catalog and port methods an app signs with its HMAC secret (ADR 0015). They let an app's own
-// UI show which public apps exist and bind, unbind and connect its ports. The calling install is
-// already authenticated. Every install they touch belongs to its tenant.
-
-/** `apps/list`: every initialized public app other than the caller. */
+/**
+ * `apps/list`: every initialized public app other than the caller. Like every catalog and port
+ * method here, an app signs it with its HMAC secret so its own UI can manage its ports (ADR 0015).
+ * The caller is already authenticated, and every install these methods touch belongs to its tenant.
+ */
 export const listApps = (caller: Install) =>
   Store.use(({ apps }) =>
     Effect.map(apps.all, (all) =>
@@ -51,14 +51,14 @@ export const listPorts = Effect.fnUntraced(function* (caller: Install) {
 
 /**
  * `ports/bind`: bind a port to an action of a public app. Uses the tenant's first install of that
- * app, or creates one with empty config.
+ * app, or creates one with empty config. An existing provider runs its pinned version, a new one
+ * the latest (ADR 0017).
  */
 export const bindPort = Effect.fnUntraced(function* (caller: Install, port: string, appId: AppId, action: string) {
   yield* declared(caller, port);
   const app = yield* (yield* Store).apps.lookup(appId);
   if (app?.visibility !== "public" || !app.latest) return yield* new BadRequest({ message: `no public app ${appId}` });
   const installs = yield* Installs;
-  // An existing provider runs its pinned version, a new one the latest (ADR 0017).
   const { install: provider, created } = yield* installs.provider(caller.tenantId, app.latest, ({ manifest }) =>
     providesAction(manifest, action, manifest.name),
   );
@@ -89,7 +89,6 @@ const declared = Effect.fnUntraced(function* (caller: Install, port: string) {
   yield* Effect.fromResult(declaresPort(caller.version.manifest, port));
 });
 
-/** The provider install a port is bound to, if it still exists in the caller's tenant. */
 const boundProvider = Effect.fnUntraced(function* (caller: Install, port: string) {
   const binding = caller.bindings.get(port);
   const provider = binding && (yield* (yield* Installs).lookup(binding.installId));

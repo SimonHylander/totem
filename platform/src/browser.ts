@@ -5,23 +5,21 @@ import { OAUTH_CALLBACK_PATH, beginOAuthConnect, finishOAuthConnect, type Callba
 import { BadRequest, Forbidden } from "./errors.js";
 import { PlatformConfig } from "./store.js";
 
-// Browser pages. OAuth consent is a browser flow, so connecting runs here with a session cookie
-// instead of on the bearer-token API (ADR 0011).
-
 const COOKIE = "totem_session";
 const CONNECT = /^\/installs\/(?<installId>[^/]+)\/connect\/(?<name>[^/]+)$/;
 const CALLBACK = new RegExp(`^${OAUTH_CALLBACK_PATH}/(?<bindingId>[^/]+)$`);
 
-/** Serve one browser request. Failures are left to the HTTP shell, which renders them with `errorPage`. */
+/**
+ * Serve one browser request. OAuth consent is a browser flow, so connecting runs here with a
+ * session cookie instead of on the bearer-token API (ADR 0011). Failures are left to the HTTP
+ * shell, which renders them with `errorPage`.
+ */
 export const handleBrowser = Effect.fnUntraced(function* (request: Request) {
   const url = new URL(request.url);
   const { baseUrl } = yield* PlatformConfig;
   const session = yield* sessionFor(cookie(request, COOKIE));
 
-  // Browsers send Origin on cross-site form posts. Refusing them stops another site from signing
-  // a victim in as the attacker (login CSRF) or submitting a connect form.
-  const origin = request.headers.get("origin");
-  if (request.method === "POST" && origin !== null && origin !== new URL(baseUrl).origin) {
+  if (isCrossSiteFormPost(request, baseUrl)) {
     return yield* new Forbidden({ message: "cross-site form post" });
   }
 
@@ -59,6 +57,15 @@ export function browserRoute(pathname: string): string {
   return "unmatched";
 }
 
+const isCrossSiteFormPost = (request: Request, baseUrl: string): boolean => {
+  const origin = request.headers.get("origin");
+  return request.method === "POST" && origin !== null && origin !== new URL(baseUrl).origin;
+};
+
+const sameSitePath = (next: string): string =>
+  // quirk: browsers read "/\" as "//", a protocol-relative URL to another host.
+  /^\/(?![/\\])/.test(next) ? next : "/";
+
 export function errorPage(status: number, message: string): Response {
   return page(status, "Error", `<p>${escape(message)}</p>`);
 }
@@ -74,8 +81,7 @@ const submitSignIn = Effect.fnUntraced(function* (request: Request) {
   return new Response(null, {
     status: 303,
     headers: {
-      // Only same-site paths, so the form cannot redirect elsewhere. Browsers read "/\" as "//".
-      location: /^\/(?![/\\])/.test(next) ? next : "/",
+      location: sameSitePath(next),
       "set-cookie": `${COOKIE}=${session.id}; HttpOnly; SameSite=Lax; Path=/${secure}`,
     },
   });

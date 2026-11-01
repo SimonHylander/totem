@@ -8,9 +8,6 @@ import { mintCallbackToken } from "./callback-token.js";
 import { Installs, type Install } from "./installs.js";
 import { Store, type AppRecord } from "./store.js";
 
-// The platform's adapters for the domain ports: Installs as InstallRepo, and signed JSON-RPC over
-// HTTP as AppTransport.
-
 /** Installs for the domain packages, read-only. */
 export const installRepoLayer = Layer.effect(
   InstallRepo,

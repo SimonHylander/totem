@@ -6,10 +6,6 @@ import type { Principal } from "@totem/permissions";
 import type { Session } from "./access.js";
 import { NotFound, type ProviderFailed } from "./errors.js";
 
-// In-memory platform state. Everything is lost on restart (ADR 0011). Records are immutable: every
-// write replaces the whole record through the Store, so a reader never sees a half-applied change.
-// Installs live in their own module, `installs.ts`, which is their only writer.
-
 /**
  * A secret the platform holds. `reveal()` is the only read. JSON, string conversion and Node's
  * inspector print "[sealed]", so a log line or response body cannot carry the value by accident.
@@ -157,7 +153,12 @@ export function withEntry<K, V>(map: ReadonlyMap<K, V>, key: K, value: V | undef
   return next;
 }
 
-/** The platform's state. One per platform, seeded with the management tokens by SHA-256 hex. */
+/**
+ * The platform's state. One per platform, seeded with the management tokens by SHA-256 hex. It is
+ * in memory, so everything is lost on restart (ADR 0011). Records are immutable: every write
+ * replaces the whole record, so a reader never sees a half-applied change. Installs live in
+ * `Installs`, their only writer.
+ */
 export class Store extends Context.Service<
   Store,
   {
