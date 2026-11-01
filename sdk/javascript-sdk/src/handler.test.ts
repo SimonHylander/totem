@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ErrorCode, SIGNATURE_HEADER, sign, type JsonRpcResponse, type PlatformMethods } from "@totem/protocol";
+import { ErrorCode, SIGNATURE_HEADER, sign, type JsonRpcResponse } from "@totem/protocol";
 import { defineApp } from "./define-app.js";
-import { fakePlatform, type FakePlatform } from "./fake-platform.js";
+import { fakePlatform } from "./fake-platform.js";
 import { createHandler } from "./handler.js";
 import { AppError } from "./errors.js";
 
@@ -44,24 +44,6 @@ const app = defineApp(manifest, {
 const secret = "app-secret";
 const platformUrl = "http://platform.test/rpc";
 
-/** Serve platform methods from a fake, so the handler's real client can be exercised in-process. */
-function platformFetch(platform: FakePlatform): typeof fetch {
-  return async (_url, init) => {
-    const { id, method, params } = JSON.parse(String(init?.body)) as { id: number; method: keyof PlatformMethods; params: never };
-    const dispatch: { [K in keyof PlatformMethods]: (p: PlatformMethods[K]["params"]) => Promise<PlatformMethods[K]["result"]> } = {
-      "credentials/get": ({ name }) => platform.getCredential(name),
-      "state/get": async ({ key }) => ({ value: await platform.getState(key) }),
-      "state/set": async () => ({}) as never,
-      log: async () => ({}) as never,
-      "actions/invoke": async ({ port, input }) => ({ output: await platform.invokePort(port, input) }),
-    };
-    if (method === "state/set") await platform.setState(params["key"], params["value"]);
-    if (method === "log") await platform.log(params["level"], params["message"], params["data"]);
-    const result = await dispatch[method](params);
-    return Response.json({ jsonrpc: "2.0", id, result } satisfies JsonRpcResponse);
-  };
-}
-
 async function call(handle: ReturnType<typeof createHandler>, method: string, params: unknown, options: { sign?: boolean } = {}) {
   const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method, params });
   const headers: Record<string, string> = { "content-type": "application/json" };
@@ -91,7 +73,7 @@ describe("createHandler", () => {
 
   it("invokes an action with state and ports routed through the platform client", async () => {
     const platform = fakePlatform(app, { ports: { shout: async ({ text }) => ({ text: text.toUpperCase() }) } });
-    const handle = createHandler(app, { secret, platformUrl, fetch: platformFetch(platform) });
+    const handle = createHandler(app, { secret, platformUrl, fetch: platform.fetch });
 
     const { body } = await call(handle, "actions/invoke", {
       action: "echo",
@@ -107,7 +89,7 @@ describe("createHandler", () => {
 
   it("maps AppError to a JSON-RPC error and masks unknown throws", async () => {
     const platform = fakePlatform(app);
-    const handle = createHandler(app, { secret, platformUrl, fetch: platformFetch(platform) });
+    const handle = createHandler(app, { secret, platformUrl, fetch: platform.fetch });
 
     const failed = await call(handle, "actions/invoke", { action: "fail", input: {}, context, callbackToken: "tok" });
     expect(failed.body).toMatchObject({ error: { code: 1001, message: "nope", data: { why: "test" } } });
