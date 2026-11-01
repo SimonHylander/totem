@@ -1,32 +1,27 @@
 import { createServerFn } from "@tanstack/react-start";
+import { Option, Schema, SchemaTransformation, identity } from "effect";
 import { eventsInstall, totem } from "../../totem/connection.js";
 
-type Registration = { eventId: string; email: string; firstName?: string; lastName?: string };
+const Text = Schema.Trim.check(Schema.isNonEmpty());
 
-/** Server functions are public endpoints, so check their input before it reaches the platform. */
-function text(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.trim() === "") throw new Error(`${field} is required`);
-  return value.trim();
-}
+/** A blank form field means no name, so an empty string decodes to a missing key. */
+const OptionalText = Schema.optional(Schema.String).pipe(
+  Schema.decodeTo(
+    Schema.optionalKey(Text),
+    SchemaTransformation.transformOptional<string, string | undefined>({
+      decode: Option.filter((value): value is string => value !== undefined && value !== ""),
+      encode: identity,
+    }),
+  ),
+);
 
-/** Checks a registration. The page runs it on submit too, so the attendee's line shows what is sent. */
-export function registration(data: unknown): Registration {
-  const { eventId, email, firstName, lastName } = (data ?? {}) as Record<string, unknown>;
-  const optional = (value: unknown, field: string) => (value === undefined || value === "" ? undefined : text(value, field));
-  const first = optional(firstName, "firstName");
-  const last = optional(lastName, "lastName");
-  return {
-    eventId: text(eventId, "eventId"),
-    email: text(email, "email"),
-    ...(first !== undefined && { firstName: first }),
-    ...(last !== undefined && { lastName: last }),
-  };
-}
+/** A registration. The page decodes with it on submit too, so the attendee's line shows what is sent. */
+export const Registration = Schema.Struct({ eventId: Text, email: Text, firstName: OptionalText, lastName: OptionalText });
 
 export const getEvent = createServerFn({ method: "GET" })
-  .validator((eventId: unknown) => text(eventId, "eventId"))
+  .validator(Schema.toStandardSchemaV1(Text))
   .handler(({ data: eventId }) => totem().client.start(eventsInstall(), "eventInfo", { eventId }));
 
 export const registerAttendee = createServerFn({ method: "POST" })
-  .validator(registration)
+  .validator(Schema.toStandardSchemaV1(Registration))
   .handler(({ data }) => totem().client.start(eventsInstall(), "register", data));

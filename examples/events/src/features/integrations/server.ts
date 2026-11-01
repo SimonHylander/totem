@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { Schema } from "effect";
 import { manifest } from "../../totem/manifest.js";
 import { eventsInstall, totem } from "../../totem/connection.js";
 
@@ -12,18 +13,7 @@ const isPort = (value: unknown): value is Port => typeof value === "string" && O
 
 const PORTS = Object.keys(manifest.needs.actions).filter(isPort);
 
-/** Server functions are public endpoints, so check their input before it reaches the platform. */
-function field(data: unknown, name: string): string {
-  const value = ((data ?? {}) as Record<string, unknown>)[name];
-  if (typeof value !== "string" || value === "") throw new Error(`${name} is required`);
-  return value;
-}
-
-function port(data: unknown): Port {
-  const value = field(data, "port");
-  if (!isPort(value)) throw new Error(`no port ${value}`);
-  return value;
-}
+const Port = Schema.Literals(PORTS);
 
 export const getIntegrations = createServerFn({ method: "GET" }).handler(async () => {
   const { client } = totem();
@@ -42,14 +32,16 @@ export const getIntegrations = createServerFn({ method: "GET" }).handler(async (
 });
 
 export const enable = createServerFn({ method: "POST" })
-  .validator((data: unknown) => ({ port: port(data), appId: field(data, "appId") }))
+  .validator(Schema.toStandardSchemaV1(Schema.Struct({ port: Port, appId: Schema.NonEmptyString })))
   .handler(({ data }) => totem().client.bind(eventsInstall(), data.port, { appId: data.appId, action: data.port }));
 
 export const disable = createServerFn({ method: "POST" })
-  .validator((data: unknown) => ({ port: port(data) }))
+  .validator(Schema.toStandardSchemaV1(Schema.Struct({ port: Port })))
   .handler(({ data }) => totem().client.unbind(eventsInstall(), data.port));
 
 /** Returns the provider URL. The platform rejects a `returnTo` off this app's origin. */
 export const connect = createServerFn({ method: "POST" })
-  .validator((data: unknown) => ({ port: port(data), credential: field(data, "credential"), returnTo: field(data, "returnTo") }))
+  .validator(
+    Schema.toStandardSchemaV1(Schema.Struct({ port: Port, credential: Schema.NonEmptyString, returnTo: Schema.NonEmptyString })),
+  )
   .handler(({ data }) => totem().client.connect(eventsInstall(), data.port, data.credential, data.returnTo));
