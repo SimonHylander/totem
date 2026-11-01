@@ -7,8 +7,7 @@ import { Schema } from "effect";
 
 /**
  * Where an install is in its lifecycle. A new install is Pending while its `install` hook runs, and
- * Active once the hook succeeds or the app has none. Only Active installs run actions. More states
- * join when an operation reaches them, such as uninstall or upgrade.
+ * Active once the hook succeeds or the app has none. Only Active installs run actions.
  */
 export const Pending = Schema.TaggedStruct("Pending", {});
 export const Active = Schema.TaggedStruct("Active", {});

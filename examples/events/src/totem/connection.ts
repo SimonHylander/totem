@@ -1,9 +1,7 @@
 import { appClient, createHandler } from "@totem/sdk";
 import { app } from "./app.js";
 
-// Server-only wiring between this TanStack Start app and the Totem platform. The platform calls
-// the app at /totem (routes/totem.ts). The features' server functions start actions on
-// `eventsInstall()` through `client`.
+// Server-only wiring between this TanStack Start app and the Totem platform.
 //   TOTEM_APP_SECRET    issued when the operator registered the app
 //   TOTEM_PLATFORM_URL  the platform-methods endpoint, such as http://localhost:3000/rpc
 //   EVENTS_INSTALL_ID   the tenant install this deployment's UI serves

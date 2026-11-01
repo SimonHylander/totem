@@ -79,8 +79,6 @@ a:hover {
   margin: 0;
 }
 
-/* Page frame: one reading-width column on every viewport. */
-
 .bar {
   border-bottom: 1px solid var(--line);
 }
@@ -134,8 +132,6 @@ main {
   color: var(--ink-2);
 }
 
-/* Event list: one row per event, the open count in a fixed tabular column. */
-
 .events {
   list-style: none;
   padding: 0;
@@ -178,8 +174,6 @@ main {
   color: var(--ink);
   font-weight: 600;
 }
-
-/* The sheet: numbered lines down to the capacity rule, the waitlist below it. */
 
 .sheet {
   list-style: none;
@@ -233,7 +227,6 @@ main {
   white-space: nowrap;
 }
 
-/* What the attendee is typing, previewed on their line before they submit. */
 .row-draft {
   color: var(--ink-2);
 }
@@ -276,8 +269,6 @@ main {
 .rule-label {
   grid-column: 2;
 }
-
-/* Form parts below the sheet. */
 
 .field-email {
   margin-top: 24px;

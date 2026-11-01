@@ -4,10 +4,7 @@ import { registerAttendee, registration } from "./server.js";
 import { nextSpot, sheetRows, type Spot } from "./sheet.js";
 import { SheetRow, rowKey, type Signed } from "./SheetRow.js";
 
-// The public registration page for one event. Anyone with the URL can register (ADR 0014: the app
-// decides who may trigger its actions). The page draws the event as a sign-up sheet (sheet.ts):
-// the attendee's line previews what they type in the form below it, and their name is written
-// onto it once they hold the spot.
+// Anyone with the URL can register. The app decides who may trigger its actions (ADR 0014).
 
 const route = getRouteApi("/events/$eventId");
 

@@ -1,7 +1,5 @@
 import { Link, getRouteApi } from "@tanstack/react-router";
 
-// Every event of the tenant install this deployment serves.
-
 const route = getRouteApi("/");
 
 export function EventList() {

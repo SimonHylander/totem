@@ -2,9 +2,7 @@ import { useState } from "react";
 import { Link, getRouteApi, useRouter } from "@tanstack/react-router";
 import { connect, disable, enable, type Port } from "./server.js";
 
-// The integrations marketplace for the tenant install this deployment serves. It lists the public
-// apps that can fill each port and lets the user enable, disable and connect them (ADR 0015). There
-// is no login yet, so anyone who can reach this page can change the tenant's integrations.
+// There is no login yet, so anyone who can reach this page can change the tenant's integrations (ADR 0015).
 
 const route = getRouteApi("/integrations");
 

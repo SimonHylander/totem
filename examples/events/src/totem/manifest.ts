@@ -31,7 +31,6 @@ const eventSummary = {
   additionalProperties: false,
 } as const;
 
-/** Input with only an event ID. */
 const byEvent = { type: "object", required: ["eventId"], properties: eventId, additionalProperties: false } as const;
 
 export const manifest = {
