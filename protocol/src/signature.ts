@@ -25,7 +25,6 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/** Produce the header value for a request body. */
 export async function sign(
   secret: string,
   body: string,

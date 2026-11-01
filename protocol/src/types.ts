@@ -1,6 +1,6 @@
 import type { JSONSchema } from "json-schema-to-ts";
 
-// Hand-written mirrors of the JSON Schemas in this folder. Keep them in sync.
+// Hand-written mirrors of the JSON Schemas in this folder. contract.test.ts fails on drift.
 // TypeScript reads manifests at compile time through `as const`, so the
 // manifest type must accept literal schemas. Codegen is for Python and Go.
 

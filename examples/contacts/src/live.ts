@@ -12,7 +12,6 @@ const PLATFORM = "http://localhost:3100";
 const CONTACTS = "http://localhost:3101/";
 const ENRICHER = "http://localhost:3102/";
 
-/** The provider for contacts' enrichPerson port. */
 const enricher = defineApp(
   {
     name: "enricher",
@@ -54,7 +53,6 @@ const tracer = Tracer.make({
   },
 });
 
-/** Platform log lines with the trace they were written in. */
 const logs: { message: unknown; traceId: string | undefined }[] = [];
 const logRecorder = Logger.make(({ message, fiber }) => {
   const span = Context.getOption(fiber.context, Tracer.ParentSpan);

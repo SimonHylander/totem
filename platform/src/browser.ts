@@ -7,13 +7,6 @@ import { PlatformConfig } from "./store.js";
 
 // Browser pages. OAuth consent is a browser flow, so connecting runs here with a session cookie
 // instead of on the bearer-token API (ADR 0011).
-//
-//   GET  /signin                           sign-in form
-//   POST /signin                           management token in, session cookie out
-//   GET  /installs/:id/connect/:credential page with a Connect button
-//   POST /installs/:id/connect/:credential start the connect, redirect to the provider
-//   GET  /oauth/callback/:binding          the provider's redirect. Connects an app began through
-//                                          `ports/connect` need no session and return to the app (ADR 0015).
 
 const COOKIE = "totem_session";
 const CONNECT = /^\/installs\/(?<installId>[^/]+)\/connect\/(?<name>[^/]+)$/;

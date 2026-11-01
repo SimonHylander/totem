@@ -4,7 +4,6 @@
 # and checks both ids match. Saves the responses, matching log lines and verdict.txt next to
 # register.mjs's evidence.
 # Usage: confirm.sh <email> [event name, default "HubSpot workshop"]. Exits 1 unless PASS.
-# A registration made without a HubSpot connection reports "FAIL: the CRM sync failed".
 source "$(dirname "$0")/_common.sh"
 
 email=$(tr '[:upper:]' '[:lower:]' <<< "${1:?usage: confirm.sh <email> [event]}")

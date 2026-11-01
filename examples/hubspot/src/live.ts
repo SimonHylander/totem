@@ -5,7 +5,6 @@ import { app } from "./app.js";
 // Run the platform and this app against your HubSpot account. `pnpm live` reads .env.local:
 //   HUBSPOT_CLIENT_ID      from the totem-test project's Auth tab
 //   HUBSPOT_CLIENT_SECRET  same place. Never commit it.
-// Management tokens are generated per run and printed below.
 
 const PLATFORM = "http://localhost:3000";
 const APP_PORT = 3002;

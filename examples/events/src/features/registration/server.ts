@@ -1,9 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { eventsInstall, totem } from "../../totem/connection.js";
 
-// Server functions for the registration page. Each submit runs the app's `register` action
-// through the platform, which syncs the attendee to the bound CRM.
-
 type Registration = { eventId: string; email: string; firstName?: string; lastName?: string };
 
 /** Server functions are public endpoints, so check their input before it reaches the platform. */

@@ -28,10 +28,7 @@ class Proof<A extends ManagementAction> {
 /** Proof that the check ran. Operations that need authorization take one instead of a principal. */
 export type Authorized<A extends ManagementAction> = Proof<A>;
 
-/**
- * The only authorization rule. Custom roles, audit and approvals later change this function, not
- * its callers.
- */
+/** The only authorization rule. */
 export function can({ role }: Principal, action: ManagementAction): boolean {
   if (role.name === "operator") return true;
   switch (action.type) {

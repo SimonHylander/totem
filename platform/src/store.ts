@@ -85,7 +85,7 @@ export type Connection =
       readonly expiresAt: DateTime.Utc;
       /** Null if the provider issued none. The connection then ends at `expiresAt`. */
       readonly refreshToken: Sealed | null;
-      /** Token response fields other than the tokens, kept as returned. HubSpot's `hub_id` will route webhooks. */
+      /** Token response fields other than the tokens, kept as returned. */
       readonly providerFields: Readonly<Record<string, unknown>>;
     }
   | { readonly type: "apiKey"; readonly key: Sealed };
@@ -113,9 +113,7 @@ export type PendingConnect = {
  * depends on it cannot interleave with another fiber's.
  */
 export type Table<K extends string, V> = {
-  /** The record, or NotFound. */
   readonly get: (key: K) => Effect.Effect<V, NotFound>;
-  /** The record, or undefined. */
   readonly lookup: (key: K) => Effect.Effect<V | undefined>;
   readonly all: Effect.Effect<ReadonlyArray<V>>;
   readonly put: (value: V) => Effect.Effect<void>;
@@ -167,7 +165,6 @@ export class Store extends Context.Service<
     readonly sessions: Table<string, Session>;
     /** Keyed by `state`. */
     readonly pendingConnects: Table<string, PendingConnect>;
-    /** Management tokens by SHA-256 hex. Seeded from config. */
     readonly apiTokens: ReadonlyMap<string, Principal>;
     /** One in-flight refresh per connection record. Concurrent `credentials/get` calls await it. */
     readonly refreshes: WeakMap<OAuthConnection, Deferred.Deferred<OAuthConnection | null, ProviderFailed>>;
