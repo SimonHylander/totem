@@ -3,7 +3,8 @@ import type { InstallId } from "@totem/ids";
 import { authorize, type InstallActionType, type Principal } from "@totem/permissions";
 import { DateTime, Effect } from "effect";
 import { Unauthenticated } from "./errors.js";
-import { Store, randomToken, type Install } from "./store.js";
+import { Installs, type Install } from "./installs.js";
+import { Store, randomToken } from "./store.js";
 
 // Platform access (ADR 0011). Only the management API uses it. Apps never see a principal.
 
@@ -35,7 +36,7 @@ export const authenticate = Effect.fnUntraced(function* (token: string) {
 
 /** Load an install and authorize an install-scoped action on it. */
 export const authorizeInstall = <T extends InstallActionType>(principal: Principal, installId: InstallId, type: T) =>
-  Store.use(({ installs }) => installs.get(installId)).pipe(
+  Installs.use((installs) => installs.get(installId)).pipe(
     Effect.flatMap((install) => Effect.fromResult(authorize<InstallAction<T>>(principal, { type, install }))),
   );
 

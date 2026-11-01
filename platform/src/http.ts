@@ -20,6 +20,7 @@ import { browserRoute, errorPage, handleBrowser } from "./browser.js";
 import { connectApiKey, setOAuthClient } from "./connections.js";
 import { BadRequest, type PlatformError } from "./errors.js";
 import { handlePlatformMethod } from "./platform-methods.js";
+import { Installs } from "./installs.js";
 import { PlatformConfig, Store } from "./store.js";
 
 // The HTTP shell. Routes decode the request, authorize it and call one operation with the proof.
@@ -34,7 +35,7 @@ export type PlatformOptions = {
   fetch?: typeof fetch;
 };
 
-type Services = Store | PlatformConfig | HttpClient.HttpClient | AppTransport | InstallRepo;
+type Services = Store | Installs | PlatformConfig | HttpClient.HttpClient | AppTransport | InstallRepo;
 
 const NonEmpty = Schema.NonEmptyString;
 const PortBinding = Schema.Struct({ installId: InstallId, action: NonEmpty });
@@ -244,7 +245,7 @@ const handleRequest = (request: Request): Effect.Effect<Response, never, Service
 export function platformLayer({ baseUrl, principals, allowLocalhost = false, fetch }: PlatformOptions) {
   const store = Store.layer(new Map(principals.map(({ token, principal }) => [hashToken(token), Schema.decodeUnknownSync(Principal)(principal)])));
   return Layer.mergeAll(
-    Layer.provideMerge(Layer.mergeAll(installRepoLayer, appTransportLayer), store),
+    Layer.provideMerge(Layer.mergeAll(installRepoLayer, appTransportLayer), Layer.merge(store, Installs.layer)),
     Layer.succeed(PlatformConfig, { baseUrl, allowLocalhost }),
     FetchHttpClient.layer,
     fetch ? Layer.succeed(FetchHttpClient.Fetch, fetch) : Layer.empty,

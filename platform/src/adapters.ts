@@ -5,17 +5,18 @@ import { AppFailed, AppTransport } from "@totem/runtime";
 import { Clock, Effect, Layer } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { mintCallbackToken } from "./callback-token.js";
-import { Store, type AppRecord, type Install } from "./store.js";
+import { Installs, type Install } from "./installs.js";
+import { Store, type AppRecord } from "./store.js";
 
-// The platform's adapters for the domain ports: the Store as InstallRepo, and signed JSON-RPC over
+// The platform's adapters for the domain ports: Installs as InstallRepo, and signed JSON-RPC over
 // HTTP as AppTransport.
 
-/** Installs from the Store. */
+/** Installs for the domain packages, read-only. */
 export const installRepoLayer = Layer.effect(
   InstallRepo,
   Effect.gen(function* () {
-    const { installs } = yield* Store;
-    return InstallRepo.of({ lookup: (id) => installs.lookup(id) });
+    const { lookup } = yield* Installs;
+    return InstallRepo.of({ lookup });
   }),
 );
 
