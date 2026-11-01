@@ -71,13 +71,13 @@ export class Installs extends Context.Service<
     readonly connect: (id: InstallId, name: string, connection: Connection) => Effect.Effect<void, NotFound>;
     /**
      * Store a refresh's result: `next`, or no connection when it is undefined. Applies only while
-     * `expected` is still stored, so a reconnect that landed meanwhile wins. Returns the stored
-     * oauth2 connection afterwards, or null, including when the install was deleted.
+     * the stored connection has revision `expected`. Returns the stored oauth2 connection
+     * afterwards, or null, including when the install was deleted.
      */
     readonly replaceConnection: (
       id: InstallId,
       name: string,
-      expected: OAuthConnection,
+      expected: string,
       next: OAuthConnection | undefined,
     ) => Effect.Effect<OAuthConnection | null>;
     /** Set one state key. A null value deletes it. */
@@ -169,13 +169,14 @@ export class Installs extends Context.Service<
           ),
 
         replaceConnection: (id, name, expected, next) =>
-          update(id, (install) =>
-            Result.succeed(
-              install.connections.get(name) === expected
+          update(id, (install) => {
+            const stored = install.connections.get(name);
+            return Result.succeed(
+              stored?.type === "oauth2" && stored.revision === expected
                 ? { ...install, connections: withEntry(install.connections, name, next) }
                 : install,
-            ),
-          ).pipe(
+            );
+          }).pipe(
             Effect.map((install) => {
               const stored = install.connections.get(name);
               return stored?.type === "oauth2" ? stored : null;

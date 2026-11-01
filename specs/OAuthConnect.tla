@@ -2,11 +2,11 @@
 (***************************************************************************)
 (* The OAuth connect flow of one install's credential (ADR 0012, ADR 0015, *)
 (* platform/src/connections.ts), with every interleaving of:              *)
-(*   - operators changing the OAuth client (a new binding object),         *)
+(*   - operators changing the OAuth client (a new binding),                *)
 (*   - connects started, and their callbacks taking the pending state,     *)
 (*   - token exchanges that finish later,                                  *)
 (*   - refreshes of the stored connection that finish later.               *)
-(* Bindings and connection records are compared by identity in the code,   *)
+(* Bindings and connection records carry a fresh revision in the code,     *)
 (* so here each is a fresh number.                                         *)
 (***************************************************************************)
 EXTENDS Naturals, FiniteSets

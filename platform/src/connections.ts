@@ -53,6 +53,7 @@ export const setOAuthClient = Effect.fnUntraced(function* (
   if (current?.id === id && current.clientId === client.clientId) current.clientSecret = new Sealed(client.clientSecret);
   else {
     const binding: OAuthBinding = {
+      revision: crypto.randomUUID(),
       id,
       clientId: client.clientId,
       clientSecret: new Sealed(client.clientSecret),
@@ -136,7 +137,7 @@ export const finishOAuthConnect = Effect.fnUntraced(function* (
   const install = yield* installs.get(pending.installId);
   if (session && pending.sessionId !== null) yield* Effect.fromResult(authorize(session.principal, { type: "install.connect", install }));
   const { binding } = yield* oauthBinding(install, pending.credential);
-  if (binding !== pending.binding) return yield* new Conflict({ message: "the OAuth client changed during the connect" });
+  if (binding.revision !== pending.binding.revision) return yield* new Conflict({ message: "the OAuth client changed during the connect" });
 
   const body = yield* tokenRequest(binding, {
     grant_type: "authorization_code",
@@ -155,7 +156,7 @@ export const credentialStatus = Effect.fnUntraced(function* (install: Install) {
   for (const [name, need] of Object.entries(install.version.manifest.needs.credentials ?? {})) {
     const connection = install.connections.get(name);
     const connected =
-      connection?.type === "oauth2" ? connection.binding === oauthBindings.get(name) : connection?.type === need.type;
+      connection?.type === "oauth2" ? connection.bindingRevision === oauthBindings.get(name)?.revision : connection?.type === need.type;
     status[name] = { type: need.type, connected };
   }
   return status;
@@ -191,12 +192,12 @@ export const getCredential = Effect.fnUntraced(function* (claims: CallbackClaims
   if (connection?.type !== "oauth2" || need.type !== "oauth2") return yield* missing;
 
   const binding = (yield* apps.get(install.appId)).oauthBindings.get(name);
-  if (connection.binding !== binding) return yield* missing;
+  if (!binding || connection.bindingRevision !== binding.revision) return yield* missing;
 
   const stale = DateTime.isLessThanOrEqualTo(connection.expiresAt, DateTime.add(yield* DateTime.now, REFRESH_MARGIN));
   const fresh = stale ? yield* refresh(install, name, binding, connection) : connection;
   // The client may have changed while the refresh ran. A grant of the old client reads as missing.
-  if (!fresh || (stale && fresh.binding !== (yield* apps.get(install.appId)).oauthBindings.get(name))) return yield* missing;
+  if (!fresh || (stale && fresh.bindingRevision !== (yield* apps.get(install.appId)).oauthBindings.get(name)?.revision)) return yield* missing;
   return {
     type: "oauth2",
     accessToken: fresh.accessToken.reveal(),
@@ -204,7 +205,7 @@ export const getCredential = Effect.fnUntraced(function* (claims: CallbackClaims
   } satisfies CredentialValue;
 });
 
-/** One refresh per connection record at a time. Concurrent callers await the same Deferred. Null when the grant is gone. */
+/** One refresh per connection revision at a time. Concurrent callers await the same Deferred. Null when the grant is gone. */
 const refresh = Effect.fnUntraced(function* (
   install: Install,
   name: string,
@@ -212,13 +213,13 @@ const refresh = Effect.fnUntraced(function* (
   connection: OAuthConnection,
 ) {
   const { refreshes } = yield* Store;
-  const inFlight = refreshes.get(connection);
+  const inFlight = refreshes.get(connection.revision);
   if (inFlight) return yield* Deferred.await(inFlight);
 
   const deferred = Deferred.makeUnsafe<OAuthConnection | null, ProviderFailed>();
-  refreshes.set(connection, deferred);
+  refreshes.set(connection.revision, deferred);
   yield* Deferred.into(refreshOnce(install, name, binding, connection), deferred).pipe(
-    Effect.ensuring(Effect.sync(() => refreshes.delete(connection))),
+    Effect.ensuring(Effect.sync(() => refreshes.delete(connection.revision))),
   );
   return yield* Deferred.await(deferred);
 });
@@ -237,9 +238,7 @@ const refreshOnce = Effect.fnUntraced(function* (
     refresh_token: connection.refreshToken.reveal(),
   });
   const refreshed = body === "invalid_grant" ? undefined : yield* toConnection(binding, body, connection.refreshToken);
-
-  // A reconnect that replaced the record we read wins over this refresh.
-  return yield* (yield* Installs).replaceConnection(install.id, name, connection, refreshed);
+  return yield* (yield* Installs).replaceConnection(install.id, name, connection.revision, refreshed);
 });
 
 /** The current binding for an oauth2 credential, checked against the manifest's endpoints. */
@@ -310,7 +309,8 @@ const toConnection = Effect.fnUntraced(function* (
   const { access_token: _access, refresh_token: _refresh, expires_in: _expires, id_token: _id, ...providerFields } = body;
   const connection: OAuthConnection = {
     type: "oauth2",
-    binding,
+    revision: crypto.randomUUID(),
+    bindingRevision: binding.revision,
     accessToken: new Sealed(tokens.access_token),
     expiresAt: DateTime.add(yield* DateTime.now, { seconds: tokens.expires_in }),
     refreshToken: tokens.refresh_token !== undefined ? new Sealed(tokens.refresh_token) : previousRefresh,
