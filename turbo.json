@@ -1,6 +1,6 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalDependencies": ["eslint.config.mjs"],
+  "globalDependencies": ["eslint.config.mjs", "eslint-rules/**", "docs/decisions/**"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

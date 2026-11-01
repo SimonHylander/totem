@@ -29,7 +29,6 @@ const install = (id: string, overrides: Partial<InstallCore> = {}): InstallCore 
 
 const caller = install("caller", { bindings: new Map([["loud", { installId: InstallId.make("provider"), action: "shout" }]]) });
 
-/** Forward `port` from `from` at `depth` against `installs`. Records the transport calls. */
 function run(installs: InstallCore[], from: InstallCore, port: string, depth = 0) {
   const calls: { install: string; action: string; depth: number }[] = [];
   const layer = Layer.mergeAll(

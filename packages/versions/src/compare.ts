@@ -16,7 +16,7 @@ export function sameJson(a: unknown, b: unknown): boolean {
 /**
  * How `to` differs from `from` for existing installs (ADR 0017). Additions to provided actions,
  * triggers and ports are Additive. Any removal or change of those, and any change to credentials,
- * state or config, is Breaking.
+ * state or config, is Breaking. Adding a credential breaks too, because a tenant must connect it.
  */
 export function compare(from: Manifest, to: Manifest): Compat {
   const added: string[] = [];
@@ -35,7 +35,6 @@ export function compare(from: Manifest, to: Manifest): Compat {
     }
     for (const name of Object.keys(after)) if (!(name in before)) added.push(`${path}.${name}`);
   }
-  // A tenant must act on any credential change, so additions break too.
   if (!sameJson(from.needs.credentials ?? {}, to.needs.credentials ?? {})) changed.push("needs.credentials");
   if ((from.needs.state ?? false) !== (to.needs.state ?? false)) changed.push("needs.state");
   if (!sameJson(from.config, to.config)) changed.push("config");

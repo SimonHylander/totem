@@ -2,11 +2,6 @@ import { Result } from "effect";
 import { Forbidden } from "./errors.js";
 import type { ManagementAction, Principal } from "./model.js";
 
-/**
- * Proof that `principal` may perform `action`. The class is not exported and its fields are
- * private, so only `authorize` creates one, and a spread copy is not a proof. The action is a frozen
- * copy, so neither the proof nor the object passed to `authorize` can change what was authorized.
- */
 class Proof<A extends ManagementAction> {
   readonly #principal: Principal;
   readonly #action: Readonly<A>;
@@ -25,7 +20,11 @@ class Proof<A extends ManagementAction> {
   }
 }
 
-/** Proof that the check ran. Operations that need authorization take one instead of a principal. */
+/**
+ * Proof that the check ran. Operations that need authorization take one instead of a principal.
+ * Only `authorize` creates one, and a spread copy is not one. It holds a frozen copy of the action,
+ * so nothing can change what was authorized.
+ */
 export type Authorized<A extends ManagementAction> = Proof<A>;
 
 /** The only authorization rule. */
