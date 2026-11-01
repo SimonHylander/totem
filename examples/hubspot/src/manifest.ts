@@ -60,8 +60,7 @@ export const manifest = {
   },
   needs: {
     credentials: {
-      // The operator's HubSpot app (totem-test/src/app/app-hsmeta.json) must list these scopes
-      // and the platform's redirect URI for this binding.
+      // The operator's HubSpot app must also list the platform's redirect URI for this binding.
       hubspot: {
         type: "oauth2",
         authorizeUrl: "https://app.hubspot.com/oauth/authorize",
