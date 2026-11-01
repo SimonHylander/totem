@@ -1,7 +1,5 @@
 import { Schema } from "effect";
 
-// Failures of install operations. The platform maps each tag to an HTTP status and a JSON-RPC code.
-
 /** `transition` has no rule for this event in this status. */
 export class IllegalTransition extends Schema.TaggedError<IllegalTransition>()("IllegalTransition", {
   message: Schema.String,

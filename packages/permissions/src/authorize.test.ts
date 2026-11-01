@@ -20,14 +20,12 @@ const core: InstallCore = {
   config: {},
   bindings: new Map(),
 };
-// Only the platform's store mints a StoredInstall, so the tests stand in for it.
 const install = core as StoredInstall;
 const foreign = { ...core, tenantId: TenantId.make("globex") } as StoredInstall;
 
 const operator: Principal = { id: "simon", role: { name: "operator" } };
 const admin: Principal = { id: "alice", role: { name: "tenantAdmin", tenantId: acme } };
 
-/** Every action, with whether a tenant admin of acme may perform it. Operators may perform all of them. */
 const table: [ManagementAction, boolean][] = [
   [{ type: "app.register" }, false],
   [{ type: "app.setOAuthClient" }, false],

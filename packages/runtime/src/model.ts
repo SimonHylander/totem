@@ -1,7 +1,5 @@
 import { Schema } from "effect";
 
-// Invoking actions on installed apps (ADR 0013).
-
 /** A port call at this depth fails, so a binding cycle cannot loop. */
 export const MAX_CALL_DEPTH = 8;
 

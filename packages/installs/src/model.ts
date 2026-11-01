@@ -2,9 +2,6 @@ import type { AppId, InstallId, TenantId } from "@totem/ids";
 import type { AppVersion } from "@totem/versions";
 import { Schema } from "effect";
 
-// An install's lifecycle and its port bindings. The platform stores installs with more fields
-// (connections, app state). Every function here takes any record with the core fields.
-
 /**
  * Where an install is in its lifecycle. A new install is Pending while its `install` hook runs, and
  * Active once the hook succeeds or the app has none. Only Active installs run actions.
@@ -23,7 +20,7 @@ export type InstallEvent = typeof InstallEvent.Type;
 /** Where a port's calls go: an action on another install of the same tenant (ADR 0013). */
 export type PortBinding = { readonly installId: InstallId; readonly action: string };
 
-/** The fields of an install this package reads. */
+/** The fields of an install this package reads. The platform stores more, and every function here takes any record with these. */
 export type InstallCore = {
   readonly id: InstallId;
   readonly tenantId: TenantId;
@@ -37,8 +34,6 @@ export type InstallCore = {
   readonly bindings: ReadonlyMap<string, PortBinding>;
 };
 
-// Brands, never constructed. A private member makes a class nominal, and a spread copy drops it, so
-// neither an object literal nor a copy is assignable. Only the cast in each minting check is.
 declare class ActiveMark {
   private readonly active: true;
 }
@@ -46,8 +41,8 @@ declare class StoredMark {
   private readonly stored: true;
 }
 
-/** An install that may run actions. `requireActive` mints it. */
+/** An install that may run actions. Only `requireActive` mints one. An object literal or a spread copy is not one. */
 export type ActiveInstall<I extends InstallCore = InstallCore> = I & ActiveMark & { readonly status: { readonly _tag: "Active" } };
 
-/** An install read from storage, so its tenant is the stored one, not one from a request. The platform's store mints it. */
+/** An install read from storage, so its tenant is the stored one, not one from a request. Only the platform's store mints one. An object literal or a spread copy is not one. */
 export type StoredInstall<I extends InstallCore = InstallCore> = I & StoredMark;

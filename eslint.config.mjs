@@ -3,6 +3,7 @@
 // (`.dependency-cruiser.cjs`).
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
+import totem from "./eslint-rules/no-comments.mjs";
 
 /** AGENTS.md says Effect first. Async code stays at framework and third-party boundaries. */
 const noPromises = [
@@ -30,6 +31,8 @@ const noStringIds = [
 
 const tests = ["**/*.test.ts", "**/test-network.ts"];
 
+const commentsNotYetRemoved = ["platform/src/**", "protocol/src/**", "sdk/**", "examples/**"];
+
 export default tseslint.config(
   { ignores: ["**/dist/**", "**/routeTree.gen.ts", "examples/hubspot/totem-test/**"] },
   js.configs.recommended,
@@ -44,6 +47,12 @@ export default tseslint.config(
       ],
       "@typescript-eslint/switch-exhaustiveness-check": ["error", { considerDefaultExhaustiveForUnions: true }],
     },
+  },
+  {
+    ignores: commentsNotYetRemoved,
+    plugins: { totem },
+    linterOptions: { reportUnusedDisableDirectives: "error" },
+    rules: { "totem/no-comments": ["error", { decisionsDir: `${import.meta.dirname}/docs/decisions` }] },
   },
   {
     // Libraries and the platform log through Effect. Examples and scripts may print.
