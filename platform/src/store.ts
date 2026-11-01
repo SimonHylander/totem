@@ -55,11 +55,12 @@ export type AppRecord = {
 
 /**
  * The provider OAuth client for one oauth2 credential, set by an operator (ADR 0012). Immutable
- * apart from `clientSecret`, the one record field written in place. A different client ID or different endpoints make a new binding object,
- * so grants made under the old binding are never sent to the new endpoints. Grants and pending
- * connects hold the object itself and compare by identity.
+ * apart from `clientSecret`. A different client ID or different endpoints make a new binding with a
+ * new `revision`, so grants made under the old binding are never sent to the new endpoints.
  */
 export type OAuthBinding = {
+  /** Unique to this binding. Grants and pending connects record it. */
+  readonly revision: string;
   /**
    * Names the redirect URI. Derived from the endpoints, so the URI survives a restart and can be
    * registered at the provider ahead of time. Two bindings for one provider share it.
@@ -72,15 +73,14 @@ export type OAuthBinding = {
   pinned: { authorizeUrl: Endpoint; tokenUrl: Endpoint };
 };
 
-/**
- * A connected credential. Each write replaces the whole record, so comparing records by identity
- * detects a concurrent change.
- */
+/** A connected credential. */
 export type Connection =
   | {
       readonly type: "oauth2";
-      /** The binding that issued these tokens. If the app's current binding differs, this reads as missing. */
-      readonly binding: OAuthBinding;
+      /** New on every write. */
+      readonly revision: string;
+      /** The revision of the binding that issued these tokens. If the app's current binding differs, this reads as missing. */
+      readonly bindingRevision: string;
       readonly accessToken: Sealed;
       readonly expiresAt: DateTime.Utc;
       /** Null if the provider issued none. The connection then ends at `expiresAt`. */
@@ -166,8 +166,8 @@ export class Store extends Context.Service<
     /** Keyed by `state`. */
     readonly pendingConnects: Table<string, PendingConnect>;
     readonly apiTokens: ReadonlyMap<string, Principal>;
-    /** One in-flight refresh per connection record. Concurrent `credentials/get` calls await it. */
-    readonly refreshes: WeakMap<OAuthConnection, Deferred.Deferred<OAuthConnection | null, ProviderFailed>>;
+    /** One in-flight refresh per connection revision. Concurrent `credentials/get` calls await it. */
+    readonly refreshes: Map<string, Deferred.Deferred<OAuthConnection | null, ProviderFailed>>;
     /** ADR 0008 callback token signing key. Whoever holds it can read every connected credential. */
     readonly callbackKey: Sealed;
   }
@@ -181,7 +181,7 @@ export class Store extends Context.Service<
           sessions: yield* makeTable("session", (session: Session) => session.id),
           pendingConnects: yield* makeTable("connect", (pending: PendingConnect) => pending.state),
           apiTokens,
-          refreshes: new WeakMap(),
+          refreshes: new Map(),
           callbackKey: new Sealed(randomToken()),
         });
       }),
