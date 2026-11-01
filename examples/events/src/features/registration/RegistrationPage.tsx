@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { getRouteApi } from "@tanstack/react-router";
+import { getRouteApi, useHydrated } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { Registration, registerAttendee } from "./server.js";
 import { nextSpot, sheetRows, takenWith, type Spot } from "./sheet.js";
@@ -31,6 +31,7 @@ export function RegistrationPage() {
   const [failed, setFailed] = useState(false);
   const [pending, setPending] = useState(false);
   const [draft, setDraft] = useState("");
+  const hydrated = useHydrated();
 
   const taken = event.capacity - event.seatsLeft;
   const spot: Spot = signed
@@ -98,7 +99,8 @@ export function RegistrationPage() {
                 <input name="lastName" autoComplete="family-name" />
               </label>
             </div>
-            <button className="submit" disabled={pending}>
+            {/* Before hydration a submit is a native GET that puts the attendee's email in the URL. A disabled default button also blocks Enter. */}
+            <button className="submit" disabled={pending || !hydrated}>
               {pending ? "Signing you up…" : full ? "Join the waitlist" : `Take seat ${spot.position}`}
             </button>
             {failed && (

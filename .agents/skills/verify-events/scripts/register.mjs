@@ -46,15 +46,16 @@ try {
 
   await page.getByRole("link", { name: values.event, exact: true }).click();
   await page.getByRole("heading", { level: 1, name: values.event }).waitFor();
-  // Until the page hydrates, Register does a native form GET instead of calling the server.
-  await page.waitForLoadState("networkidle");
+  const register = page.getByRole("button", { name: /^(Take seat|Join the waitlist)/ });
+  // Enabled means the page has hydrated.
+  await register.and(page.locator(":enabled")).waitFor();
   const seatsBefore = await page.getByText(/seats left\.|^Full\./).textContent();
 
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("First name").fill(values.first);
   await page.getByLabel("Last name").fill(values.last);
   await page.screenshot({ path: join(out, "2-filled.png") });
-  await page.getByRole("button", { name: "Register" }).click();
+  await register.click();
 
   const outcome = page.getByText(/^You're registered\.|^The event is full\./);
   const alert = page.getByRole("alert");
