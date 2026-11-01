@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextSpot, sheetRows, type Row } from "./sheet.js";
+import { nextSpot, sheetRows, takenWith, type Row } from "./sheet.js";
 
 /** A compact picture of the rows: `3x` taken line, `4o` open line, `2-13x` range, `@15` you, `|` rule. */
 function draw(rows: Row[]): string {
@@ -44,5 +44,11 @@ describe("sheetRows", () => {
 
   it("shows a waitlist place with the waitlist ahead of it", () => {
     expect(draw(sheetRows(2, 2, { list: "waitlist", position: 4 }))).toBe("1x 2x | w1x w2x w3x @w4");
+  });
+});
+
+describe("takenWith", () => {
+  it("counts a returning attendee's earlier seat as taken", () => {
+    expect(takenWith(14, { list: "seats", position: 18 })).toBe(18);
   });
 });

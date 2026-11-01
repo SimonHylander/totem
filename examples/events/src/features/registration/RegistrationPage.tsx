@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { getRouteApi } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { Registration, registerAttendee } from "./server.js";
-import { nextSpot, sheetRows, type Spot } from "./sheet.js";
+import { nextSpot, sheetRows, takenWith, type Spot } from "./sheet.js";
 import { SheetRow, rowKey, type Signed } from "./SheetRow.js";
 
 // Anyone with the URL can register. The app decides who may trigger its actions (ADR 0014).
@@ -36,8 +36,7 @@ export function RegistrationPage() {
   const spot: Spot = signed
     ? { list: signed.result.status === "registered" ? "seats" : "waitlist", position: signed.result.position }
     : nextSpot(event.capacity, event.seatsLeft);
-  // Once registered, the attendee's own seat counts as taken, even when it is a seat they held before.
-  const rows = sheetRows(event.capacity, signed && spot.list === "seats" ? Math.max(taken + 1, spot.position ?? 0) : taken, spot);
+  const rows = sheetRows(event.capacity, signed ? takenWith(taken, spot) : taken, spot);
   const full = event.seatsLeft === 0;
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {

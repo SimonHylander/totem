@@ -2,6 +2,8 @@
 // and the waitlist continues below them. The page never shows every line: long runs of taken or
 // open lines collapse into one range row, so an event of 500 seats draws about as many rows as one of 20.
 
+import { statusFor } from "../../totem/seats.js";
+
 /** Where the attendee's own line sits. `position` is unknown on the waitlist until they register. */
 export type Spot = { list: "seats" | "waitlist"; position: number | undefined };
 
@@ -11,12 +13,17 @@ export type Row =
   | { kind: "you"; list: Spot["list"]; number: number | undefined }
   | { kind: "rule"; capacity: number };
 
-/**
- * The spot a new registration would get, matching the app's `register`: the next free seat, or
- * the waitlist when the event is full.
- */
+/** The spot a new registration would get: the next free seat, or the waitlist when the event is full. */
 export function nextSpot(capacity: number, seatsLeft: number): Spot {
-  return seatsLeft > 0 ? { list: "seats", position: capacity - seatsLeft + 1 } : { list: "waitlist", position: undefined };
+  return statusFor(seatsLeft) === "registered" ? { list: "seats", position: capacity - seatsLeft + 1 } : { list: "waitlist", position: undefined };
+}
+
+/**
+ * Seats taken once the attendee holds `you`. Their own seat counts as taken, even when it is a
+ * seat they held before and the event's count already includes it.
+ */
+export function takenWith(taken: number, you: Spot): number {
+  return you.list === "seats" ? Math.max(taken + 1, you.position ?? 0) : taken;
 }
 
 /**

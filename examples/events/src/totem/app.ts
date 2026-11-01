@@ -1,5 +1,6 @@
 import { AppError, defineApp, type CallCtx } from "@totem/sdk";
 import { manifest } from "./manifest.js";
+import { statusFor, type SeatStatus } from "./seats.js";
 
 // One install serves one tenant, and the tenant runs many events through it. Each event lives in
 // install state under `event:<id>`, and `events` lists the IDs oldest first. State has no
@@ -10,7 +11,7 @@ type Attendee = {
   email: string;
   firstName?: string;
   lastName?: string;
-  status: "registered" | "waitlisted";
+  status: SeatStatus;
   checkedIn: boolean;
   crmContactId: string | null;
 };
@@ -76,7 +77,7 @@ export const app = defineApp(manifest, {
 
       const attendee: Attendee = {
         ...person,
-        status: summary(event).seatsLeft > 0 ? "registered" : "waitlisted",
+        status: statusFor(summary(event).seatsLeft),
         checkedIn: false,
         crmContactId,
       };
