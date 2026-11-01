@@ -1,4 +1,6 @@
 /// <reference types="vite/client" />
+import "@fontsource-variable/figtree";
+import "@fontsource-variable/figtree/wght-italic.css";
 import { HeadContent, Link, Outlet, Scripts, createRootRoute, useRouterState } from "@tanstack/react-router";
 import styles from "../styles.css?url";
 

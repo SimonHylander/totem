@@ -1,6 +1,7 @@
 ---
 name: Events
 description: A numbered sign-up sheet for public event registration, neutral and themed by one accent.
+typography: "See /DESIGN.md for the Figtree typeface and shared weight scale."
 colors:
   accent: "#2f5bd3"
   accent-ink: "#ffffff"
@@ -13,31 +14,31 @@ colors:
   line-strong: "#18181b"
   taken: "#d4d4d8"
   danger: "#b42318"
-typography:
+typographyStyles:
   headline:
-    fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontFamily: '"Figtree Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
     fontSize: "clamp(1.75rem, 1.4rem + 1.6vw, 2.25rem)"
     fontWeight: 650
     lineHeight: 1.1
     letterSpacing: "-0.02em"
   title:
-    fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontFamily: '"Figtree Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
     fontSize: "1.0625rem"
     fontWeight: 600
     lineHeight: 1.5
   body:
-    fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontFamily: '"Figtree Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.5
     fontFeature: "tnum"
   label:
-    fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontFamily: '"Figtree Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
     fontSize: "0.875rem"
     fontWeight: 500
     lineHeight: 1.5
   caption:
-    fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontFamily: '"Figtree Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
     fontSize: "0.8125rem"
     fontWeight: 400
     lineHeight: 1.5
@@ -129,10 +130,12 @@ A neutral zinc scale on white, with a single tenant accent that marks only what 
 
 ## Typography
 
-**Display Font:** none. The headline uses the body family.
-**Body Font:** system sans (`ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`)
+> **Shared tokens:** See [`/DESIGN.md`](/DESIGN.md) for the Figtree typeface, weight scale, OpenType features, and licensing rules. This section documents app-specific usage.
 
-**Character:** One neutral family that reads as the device's own, so the tenant accent is the only brand signal. Hierarchy comes from weight and ink step more than size.
+**Typeface:** Figtree Variable, self-hosted via `@fontsource-variable/figtree` (latin + latin-ext subsets).
+**Fallback stack:** `"Figtree Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`
+
+**Character:** One friendly geometric sans that stays neutral enough for tenant accents to be the only brand signal. Hierarchy comes from weight and ink step more than size.
 
 ### Hierarchy
 - **Headline** (650, clamp 1.75rem to 2.25rem, 1.1, -0.02em, balanced wrap): the page title, one per page.
