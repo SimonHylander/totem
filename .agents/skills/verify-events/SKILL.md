@@ -23,7 +23,7 @@ Start a run:
 scripts/launch.sh
 ```
 
-It refuses when any of the three ports is taken and prints the owner. If `/tmp/verify-events/current` exists, that is a stale run of ours: run `scripts/cleanup.sh` and launch again. Otherwise the instance belongs to the user: ask them to stop it. The script is ready when it prints the run directory. That takes about 15 seconds. It writes `TOKEN` (tenant admin), `CRM_INSTALL` (hubspot install) and `EVENTS_INSTALL` to `<run>/instance.env`. The full process output goes to `<run>/live.log`.
+It refuses when any of the three ports is taken and prints the owner. If `/tmp/verify-events/current` exists, that is a stale run of ours: run `scripts/cleanup.sh` and launch again. Otherwise the instance belongs to the user: ask them to stop it. The script is ready when it prints the run directory. That takes about 15 seconds. `live.ts` writes its ids to `<run>/ready.json` when everything is up. The script turns them into `TOKEN` (tenant admin), `CRM_INSTALL` (hubspot install) and `EVENTS_INSTALL` in `<run>/instance.env`. The full process output goes to `<run>/live.log`.
 
 Requires `examples/hubspot/.env.local` with `HUBSPOT_CLIENT_ID` and `HUBSPOT_CLIENT_SECRET`.
 
