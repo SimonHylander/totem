@@ -5,12 +5,14 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "lint": "vp lint",
+    "fmt": "vp fmt",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "live": "turbo run build --filter=@totem/example-events... && pnpm --filter @totem/example-events live"
   },
   "devDependencies": {
-    "turbo": "^2.11.3"
+    "turbo": "^2.11.3",
+    "vite-plus": "^1.4.0"
   }
 }
