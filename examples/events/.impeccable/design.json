@@ -189,12 +189,7 @@
       {
         "name": "focus-field",
         "value": "0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent)",
-        "purpose": "Focused name field, with an accent border."
-      },
-      {
-        "name": "focus-own-line",
-        "value": "inset 0 0 0 2px color-mix(in oklab, var(--accent) 35%, transparent)",
-        "purpose": "The attendee's line while its email input has focus."
+        "purpose": "Focused field, with an accent border."
       }
     ],
     "motion": [
@@ -259,9 +254,9 @@
       "name": "Sign-up Sheet",
       "kind": "custom",
       "refersTo": "sheet-row",
-      "description": "Numbered lines, a collapsed range, the attendee's own line with the email input, and the capacity rule.",
-      "html": "<ol class=\"ds-sheet\"><li class=\"ds-row\"><span class=\"ds-num\">1</span><span class=\"ds-state\">taken</span></li><li class=\"ds-row ds-range\"><span></span><span>2–5 taken</span></li><li class=\"ds-row ds-you\"><span class=\"ds-num\">6</span><input placeholder=\"Your email\" aria-label=\"Your email\" /></li><li class=\"ds-row\"><span class=\"ds-num\">7</span></li><li class=\"ds-rule\"><span>Capacity 20. The waitlist starts here.</span></li></ol>",
-      "css": ".ds-sheet { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line, #e4e4e7); font: 400 1rem/1.5 ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-variant-numeric: tabular-nums; color: var(--ink, #18181b); } .ds-row { display: grid; grid-template-columns: 3.25rem 1fr; align-items: center; min-height: 48px; border-bottom: 1px solid var(--line, #e4e4e7); } .ds-num, .ds-state, .ds-range { font-size: 0.875rem; color: var(--ink-3, #71717a); } .ds-range { min-height: 36px; } .ds-you { background: color-mix(in oklab, var(--accent, #2f5bd3) 7%, #ffffff); border-bottom: 2px solid var(--accent, #2f5bd3); } .ds-you .ds-num { color: var(--accent, #2f5bd3); font-weight: 700; font-size: 1rem; } .ds-you input { width: 100%; height: 46px; padding: 0 12px 0 0; border: 0; background: transparent; font: inherit; color: var(--ink, #18181b); caret-color: var(--accent, #2f5bd3); } .ds-you input::placeholder { color: var(--ink-2, #52525b); } .ds-you input:focus-visible { outline: none; } .ds-you:focus-within { box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent, #2f5bd3) 35%, transparent); } .ds-rule { display: grid; grid-template-columns: 3.25rem 1fr; align-items: end; padding: 18px 0 6px; border-bottom: 2px solid var(--line-strong, #18181b); font-size: 0.8125rem; color: var(--ink-2, #52525b); } .ds-rule span { grid-column: 2; }"
+      "description": "Numbered lines, a collapsed range, the attendee's own line previewing what they type, and the capacity rule.",
+      "html": "<ol class=\"ds-sheet\"><li class=\"ds-row\"><span class=\"ds-num\">1</span><span class=\"ds-state\">taken</span></li><li class=\"ds-row ds-range\"><span></span><span>2–5 taken</span></li><li class=\"ds-row ds-you\"><span class=\"ds-num\">6</span><span class=\"ds-draft\">Ada Lovelace</span></li><li class=\"ds-row\"><span class=\"ds-num\">7</span></li><li class=\"ds-rule\"><span>Capacity 20. The waitlist starts here.</span></li></ol>",
+      "css": ".ds-sheet { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line, #e4e4e7); font: 400 1rem/1.5 ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-variant-numeric: tabular-nums; color: var(--ink, #18181b); } .ds-row { display: grid; grid-template-columns: 3.25rem 1fr; align-items: center; min-height: 48px; border-bottom: 1px solid var(--line, #e4e4e7); } .ds-num, .ds-state, .ds-range { font-size: 0.875rem; color: var(--ink-3, #71717a); } .ds-range { min-height: 36px; } .ds-you { background: color-mix(in oklab, var(--accent, #2f5bd3) 7%, #ffffff); border-bottom: 2px solid var(--accent, #2f5bd3); } .ds-you .ds-num { color: var(--accent, #2f5bd3); font-weight: 700; font-size: 1rem; } .ds-draft { min-width: 0; padding-right: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2, #52525b); } .ds-rule { display: grid; grid-template-columns: 3.25rem 1fr; align-items: end; padding: 18px 0 6px; border-bottom: 2px solid var(--line-strong, #18181b); font-size: 0.8125rem; color: var(--ink-2, #52525b); } .ds-rule span { grid-column: 2; }"
     },
     {
       "name": "Signed Line",
