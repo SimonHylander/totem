@@ -36,7 +36,14 @@ export type Ports<M> = {
 
 type State = {
   get<T = unknown>(key: string): Promise<T | null>;
+  /** Write unconditionally. Use `update` when the new value depends on the current one. */
   set(key: string, value: unknown): Promise<void>;
+  /**
+   * Store `f(current)` and return it. When another call wrote the key in between, `update` reads it
+   * again and retries, so concurrent calls never lose each other's writes. `f` can run more than
+   * once, so it must not have side effects.
+   */
+  update<T>(key: string, f: (current: T | null) => T): Promise<T>;
 };
 
 type Logger = {

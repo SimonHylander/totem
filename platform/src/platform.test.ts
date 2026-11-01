@@ -25,12 +25,34 @@ const mailer = defineApp(manifest, {
   actions: {
     send: async (_input, ctx) => {
       const { key } = await ctx.credentials.get("mail");
-      const sent = ((await ctx.state.get<number>("sent")) ?? 0) + 1;
-      await ctx.state.set("sent", sent);
+      const sent = await ctx.state.update<number>("sent", (n) => (n ?? 0) + 1);
       return { key, sent };
     },
   },
 });
+
+/** Three increments that race each other through the platform. */
+const counter = defineApp(
+  {
+    name: "counter",
+    version: "0.1.0",
+    protocol: "1",
+    provides: {
+      actions: {
+        tally: { input: { type: "object" }, output: { type: "object", required: ["count"], properties: { count: { type: "number" } } } },
+      },
+    },
+    needs: { state: true },
+  } as const satisfies Manifest,
+  {
+    actions: {
+      tally: async (_input, ctx) => {
+        await Promise.all([1, 2, 3].map(() => ctx.state.update<number>("count", (n) => (n ?? 0) + 1)));
+        return { count: (await ctx.state.get<number>("count")) ?? 0 };
+      },
+    },
+  },
+);
 
 /** The mailer installed for tenant acme. */
 async function installed() {
@@ -51,6 +73,16 @@ describe("platform", () => {
 
     expect(first).toEqual({ status: 200, body: { output: { key: "k1", sent: 1 } } });
     expect(second.body).toEqual({ output: { key: "k1", sent: 2 } });
+  });
+
+  it("loses no state writes when updates race", async () => {
+    const { api, install } = testPlatform(counter);
+    const { installId } = await install();
+
+    expect(await api("acme", "POST", `/api/installs/${installId}/actions/tally`, { input: {} })).toEqual({
+      status: 200,
+      body: { output: { count: 3 } },
+    });
   });
 
   it("keeps tenants apart", async () => {

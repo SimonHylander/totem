@@ -43,12 +43,14 @@ const methods: Methods = {
   "credentials/get": (claims, { name }) => getCredential(claims, name),
 
   "state/get": (claims, { key }) =>
-    Effect.map(statefulInstall(claims), (install) => ({ value: install.state.get(key) ?? null })),
+    Effect.map(statefulInstall(claims), (install) => {
+      const entry = install.state.get(key);
+      return { value: entry?.value ?? null, version: entry?.version ?? 0 };
+    }),
 
-  "state/set": Effect.fnUntraced(function* (claims, { key, value }) {
+  "state/set": Effect.fnUntraced(function* (claims, { key, value, version }) {
     yield* statefulInstall(claims);
-    yield* (yield* Installs).setState(claims.installId, key, value);
-    return {};
+    return { version: yield* (yield* Installs).setState(claims.installId, key, value, version) };
   }),
 
   // The app's own line. It runs under the call's span and opens none (ADR 0016).
@@ -234,6 +236,7 @@ const RPC_CODES: { [K in Exclude<PlatformError["_tag"], "AppFailed">]: number } 
   CredentialMissing: ErrorCode.CredentialMissing,
   InvalidManifest: ErrorCode.InvalidParams,
   ProviderFailed: ErrorCode.InternalError,
+  StateConflict: ErrorCode.StateConflict,
 };
 
 function toRpcError(error: PlatformError): RpcError {

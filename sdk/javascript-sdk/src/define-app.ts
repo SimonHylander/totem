@@ -1,4 +1,4 @@
-import type { CallContext, InstallContext, LogLevel, Manifest, TraceMetadata, TraceParent } from "@totem/protocol";
+import { ErrorCode, RpcError, type CallContext, type InstallContext, type LogLevel, type Manifest, type TraceMetadata, type TraceParent } from "@totem/protocol";
 import { runCall, type Observability } from "./observability.js";
 import type { Platform } from "./platform.js";
 import type { ActionInput, ActionName, ActionOutput, CallCtx, Handlers, InstallCtx, Ports } from "./types.js";
@@ -72,9 +72,27 @@ function installCtx(manifest: Manifest, platform: Platform, log: Log, context: I
       state: {
         get: (key: string) => platform.call("state/get", { key }).then((r) => r.value),
         set: (key: string, value: unknown) => platform.call("state/set", { key, value }).then(() => undefined),
+        update: (key: string, f: (current: unknown) => unknown) => updateState(platform, key, f),
       },
     }),
   };
+}
+
+/** How many times `state.update` tries its write before it rethrows the StateConflict. */
+const UPDATE_ATTEMPTS = 10;
+
+async function updateState(platform: Platform, key: string, f: (current: unknown) => unknown): Promise<unknown> {
+  for (let attempt = 1; ; attempt++) {
+    const { value, version } = await platform.call("state/get", { key });
+    const next = f(value);
+    try {
+      await platform.call("state/set", { key, value: next, version });
+      return next;
+    } catch (error) {
+      const conflict = error instanceof RpcError && error.code === ErrorCode.StateConflict;
+      if (!conflict || attempt === UPDATE_ATTEMPTS) throw error;
+    }
+  }
 }
 
 function callCtx(manifest: Manifest, platform: Platform, log: Log, context: CallContext): CallCtx<Manifest> {

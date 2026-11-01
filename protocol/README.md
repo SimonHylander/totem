@@ -54,5 +54,6 @@ Protocol errors use the JSON-RPC server range `-32000` to `-32099`. Standard JSO
 | `-32004` | `ActionNotFound` | `actions/invoke` names an action the manifest does not provide. |
 | `-32005` | `Unauthorized` | Bad signature, bad or expired token. |
 | `-32006` | `DeadlineExceeded` | Call ran past `context.deadline`. |
+| `-32007` | `StateConflict` | `state/set` named a `version` the key no longer has. Read the key again and retry. |
 
 Apps report action failures with any code outside the reserved range and put details in `error.data`.

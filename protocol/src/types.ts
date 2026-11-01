@@ -116,11 +116,13 @@ export type PlatformMethods = {
   };
   "state/get": {
     params: { key: string };
-    result: { value: unknown };
+    /** `version` is 0 when the key is unset. */
+    result: { value: unknown; version: number };
   };
   "state/set": {
-    params: { key: string; value: unknown };
-    result: Record<string, never>;
+    /** With `version`, the write applies only if the key is still at that version, and fails with StateConflict otherwise. */
+    params: { key: string; value: unknown; version?: number };
+    result: { version: number };
   };
   log: {
     params: { level: LogLevel; message: string; data?: Record<string, unknown> };
@@ -192,6 +194,7 @@ export const ErrorCode = {
   ActionNotFound: -32004,
   Unauthorized: -32005,
   DeadlineExceeded: -32006,
+  StateConflict: -32007,
   // JSON-RPC standard
   InvalidRequest: -32600,
   MethodNotFound: -32601,

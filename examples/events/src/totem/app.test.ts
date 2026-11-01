@@ -72,6 +72,17 @@ describe("register", () => {
     expect(platform.portCalls).toHaveLength(1);
   });
 
+  it("gives the last seat once when two people register at the same moment", async () => {
+    const { platform, createEvent, register } = setup();
+    const { eventId } = await createEvent("Totem launch", 1);
+
+    const results = await Promise.all([register(eventId, "ada@acme.com"), register(eventId, "bob@acme.com")]);
+
+    expect(results.map((r) => r.status).sort()).toEqual(["registered", "waitlisted"]);
+    const { registered, waitlist } = await app.invoke("listAttendees", { eventId }, { platform });
+    expect([registered.length, waitlist.length]).toEqual([1, 1]);
+  });
+
   it("keeps the registration when the CRM fails", async () => {
     const { platform, createEvent, register } = setup(async () => {
       throw new AppError(1001, "HubSpot returned 503");

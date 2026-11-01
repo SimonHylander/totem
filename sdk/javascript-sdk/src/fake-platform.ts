@@ -37,6 +37,9 @@ export function fakePlatform<M extends Manifest>(
   { credentials = {}, state: initialState = {}, ports = {} }: FakeOptions<M> = {},
 ): FakePlatform {
   const state = new Map(Object.entries(initialState));
+  // Versions as the platform gives them: one counter, so a key never gets back a version it had.
+  let clock = 0;
+  const versions = new Map([...state.keys()].map((key) => [key, ++clock]));
   const logs: LogEntry[] = [];
   const portCalls: PortCall[] = [];
   const credentialLookup = credentials as Record<string, CredentialValue | undefined>;
@@ -56,14 +59,24 @@ export function fakePlatform<M extends Manifest>(
 
     async "state/get"({ key }) {
       assertDeclared(manifest.needs.state === true, "state");
-      return { value: state.get(key) ?? null };
+      return { value: state.get(key) ?? null, version: versions.get(key) ?? 0 };
     },
 
-    async "state/set"({ key, value }) {
+    async "state/set"({ key, value, version }) {
       assertDeclared(manifest.needs.state === true, "state");
-      if (value === null) state.delete(key);
-      else state.set(key, value);
-      return {};
+      const current = versions.get(key) ?? 0;
+      if (version !== undefined && version !== current) {
+        throw new RpcError(ErrorCode.StateConflict, `state "${key}" is at version ${current}, not ${version}`);
+      }
+      clock++;
+      if (value === null) {
+        state.delete(key);
+        versions.delete(key);
+        return { version: 0 };
+      }
+      state.set(key, value);
+      versions.set(key, clock);
+      return { version: clock };
     },
 
     async log({ level, message, data }) {

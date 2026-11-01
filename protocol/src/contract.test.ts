@@ -87,8 +87,14 @@ const platformMethods: Fixtures<PlatformMethods> = {
     { params: { name: "crm" }, result: { type: "oauth2", accessToken: "at", expiresAt: "2026-10-28T12:00:00Z" } },
     { params: { name: "key" }, result: { type: "apiKey", key: "k" } },
   ],
-  "state/get": [{ params: { key: "cursor" }, result: { value: 3 } }],
-  "state/set": [{ params: { key: "cursor", value: 4 }, result: {} }],
+  "state/get": [
+    { params: { key: "cursor" }, result: { value: 3, version: 7 } },
+    { params: { key: "unset" }, result: { value: null, version: 0 } },
+  ],
+  "state/set": [
+    { params: { key: "cursor", value: 4 }, result: { version: 8 } },
+    { params: { key: "cursor", value: 4, version: 7 }, result: { version: 8 } },
+  ],
   log: [
     { params: { level: "info", message: "synced", data: { count: 2 } }, result: {} },
     ...levels.map((level) => ({ params: { level, message: level }, result: {} })),
