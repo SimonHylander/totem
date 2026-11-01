@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { InstallId } from "@totem/ids";
+import type { StoredInstall } from "@totem/installs";
 import { authorize, type InstallActionType, type Principal } from "@totem/permissions";
 import { DateTime, Effect } from "effect";
 import { Unauthenticated } from "./errors.js";
@@ -9,7 +10,7 @@ import { Store, randomToken } from "./store.js";
 // Platform access (ADR 0011). Only the management API uses it. Apps never see a principal.
 
 /** An install-scoped action on a stored install. */
-export type InstallAction<T extends InstallActionType> = { readonly type: T; readonly install: Install };
+export type InstallAction<T extends InstallActionType> = { readonly type: T; readonly install: StoredInstall<Install> };
 
 /**
  * A browser signed in with a management token. OAuth consent needs it, because the provider

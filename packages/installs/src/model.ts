@@ -37,5 +37,17 @@ export type InstallCore = {
   readonly bindings: ReadonlyMap<string, PortBinding>;
 };
 
-/** An install that may run actions. Only `requireActive` narrows to it. */
-export type ActiveInstall<I extends InstallCore = InstallCore> = I & { readonly status: { readonly _tag: "Active" } };
+// Brands, never constructed. A private member makes a class nominal, and a spread copy drops it, so
+// neither an object literal nor a copy is assignable. Only the cast in each minting check is.
+declare class ActiveMark {
+  private readonly active: true;
+}
+declare class StoredMark {
+  private readonly stored: true;
+}
+
+/** An install that may run actions. `requireActive` mints it. */
+export type ActiveInstall<I extends InstallCore = InstallCore> = I & ActiveMark & { readonly status: { readonly _tag: "Active" } };
+
+/** An install read from storage, so its tenant is the stored one, not one from a request. The platform's store mints it. */
+export type StoredInstall<I extends InstallCore = InstallCore> = I & StoredMark;

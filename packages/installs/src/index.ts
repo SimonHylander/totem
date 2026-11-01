@@ -8,6 +8,7 @@ export {
   type ActiveInstall,
   type InstallCore,
   type PortBinding,
+  type StoredInstall,
 } from "./model.js";
 export { InstallRepo } from "./port.js";
 export { checkBinding, declaresPort, providesAction, requireActive, transition, withBinding } from "./transitions.js";

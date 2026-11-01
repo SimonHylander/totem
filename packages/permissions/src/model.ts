@@ -1,5 +1,5 @@
 import { TenantId } from "@totem/ids";
-import type { InstallCore } from "@totem/installs";
+import type { InstallCore, StoredInstall } from "@totem/installs";
 import { Schema } from "effect";
 
 // Who may manage what on the platform (ADR 0011). Apps never see a principal.
@@ -17,13 +17,10 @@ export type Principal = typeof Principal.Type;
 /** Actions on one stored install. */
 export type InstallActionType = "install.connect" | "install.bind" | "install.invoke" | "install.upgrade";
 
-/**
- * Every management action. Install-scoped actions carry the stored install, so the tenant that
- * `can` compares comes from the store, never from the request. `I` is the caller's install record.
- */
+/** Every management action. `I` is the caller's install record. */
 export type ManagementAction<I extends InstallCore = InstallCore> =
   | { readonly type: "app.register" }
   | { readonly type: "app.setOAuthClient" }
   | { readonly type: "app.setVisibility" }
   | { readonly type: "install.create"; readonly tenantId: TenantId }
-  | { readonly type: InstallActionType; readonly install: I };
+  | { readonly type: InstallActionType; readonly install: StoredInstall<I> };

@@ -12,6 +12,7 @@ import {
   type InstallCore,
   type PortBinding,
   type PortNotDeclared,
+  type StoredInstall,
 } from "@totem/installs";
 import { requireCompatible, type AppVersion, type IncompatibleVersion } from "@totem/versions";
 import { Context, Effect, Layer, Ref, Result } from "effect";
@@ -37,7 +38,7 @@ export class Installs extends Context.Service<
   Installs,
   {
     /** The install, or NotFound. */
-    readonly get: (id: InstallId) => Effect.Effect<Install, NotFound>;
+    readonly get: (id: InstallId) => Effect.Effect<StoredInstall<Install>, NotFound>;
     /** The install, or undefined. */
     readonly lookup: (id: InstallId) => Effect.Effect<Install | undefined>;
     /** Every install, oldest first. */
@@ -116,7 +117,7 @@ export class Installs extends Context.Service<
         get: (id) =>
           Effect.flatMap(Ref.get(ref), (all) => {
             const install = all.get(id);
-            return install ? Effect.succeed(install) : Effect.fail(notFound(id));
+            return install ? Effect.succeed(install as StoredInstall<Install>) : Effect.fail(notFound(id));
           }),
         lookup: (id) => Effect.map(Ref.get(ref), (all) => all.get(id)),
         all: Effect.map(Ref.get(ref), (all) => [...all.values()]),

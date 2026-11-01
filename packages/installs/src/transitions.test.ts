@@ -3,7 +3,7 @@ import type { Manifest } from "@totem/protocol";
 import { DateTime, Result } from "effect";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { Active, HookSucceeded, Pending, type InstallCore, type InstallEvent, type InstallStatus } from "./model.js";
+import { Active, HookSucceeded, Pending, type ActiveInstall, type InstallCore, type InstallEvent, type InstallStatus } from "./model.js";
 import { checkBinding, requireActive, transition, withBinding } from "./transitions.js";
 
 const statuses: InstallStatus[] = [Pending.make({}), Active.make({})];
@@ -71,6 +71,12 @@ describe("requireActive", () => {
   it("refuses a pending install", () => {
     expect(Result.isFailure(requireActive(install({ status: Pending.make({}) })))).toBe(true);
     expect(Result.isSuccess(requireActive(install()))).toBe(true);
+  });
+
+  it("is the only way to get an ActiveInstall", () => {
+    // @ts-expect-error an install with an Active status is not an ActiveInstall until requireActive checks it
+    const forged: ActiveInstall = { ...install(), status: Active.make({}) };
+    expect(forged.status._tag).toBe("Active");
   });
 });
 
