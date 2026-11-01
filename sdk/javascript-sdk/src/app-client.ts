@@ -11,7 +11,7 @@ import type { App } from "./define-app.js";
 import { runSigned, type Observability } from "./observability.js";
 import type { ActionInput, ActionName, ActionOutput, PortName } from "./types.js";
 
-type AppClientOptions = {
+export type AppClientOptions = {
   /** The HMAC secret issued at registration, the same one `createHandler` verifies with. */
   secret: string;
   platformUrl: string;
@@ -40,9 +40,9 @@ export function appClient<M extends Manifest>(
     );
 
   return {
+    /** Run one of the app's own actions. The platform returns what the action returned, so the output type comes from the manifest. */
     async start<K extends ActionName<M>>(installId: string, action: K, input: ActionInput<M, K>): Promise<ActionOutput<M, K>> {
       const { output } = await call("actions/start", { installId, action, input });
-      // The platform returns what this app's own action returned, so the manifest's output type holds.
       return output as ActionOutput<M, K>;
     },
 
@@ -51,9 +51,8 @@ export function appClient<M extends Manifest>(
       return (await call("apps/list", { installId })).apps;
     },
 
-    /** Each port in `needs.actions` with its provider, or null when unbound. */
+    /** Each port in `needs.actions` with its provider, or null when unbound. The platform answers with exactly the manifest's ports. */
     async ports(installId: string): Promise<Record<PortName<M>, BoundPort | null>> {
-      // The platform answers with exactly the manifest's ports.
       return (await call("ports/list", { installId })).ports as Record<PortName<M>, BoundPort | null>;
     },
 

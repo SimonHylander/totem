@@ -31,7 +31,7 @@ const noStringIds = [
 
 const tests = ["**/*.test.ts", "**/test-network.ts"];
 
-const commentsNotYetRemoved = ["protocol/src/**", "sdk/**", "examples/**"];
+const commentsNotYetRemoved = ["examples/**"];
 
 export default tseslint.config(
   { ignores: ["**/dist/**", "**/routeTree.gen.ts", "examples/hubspot/totem-test/**"] },

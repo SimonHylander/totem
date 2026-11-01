@@ -2,11 +2,10 @@ import { formatTrace, type LogLevel, type PlatformMethods, type TraceMetadata, t
 import { Effect, type ManagedRuntime, Tracer } from "effect";
 import type { Platform } from "./platform.js";
 
-// Logging and tracing for the app's own process (ADR 0016). Each call runs in an `action <name>`
-// span under the platform's span, and every callback names that span in its `trace` member. The
-// app picks where spans and local log lines go by passing its own Effect runtime.
-
-/** How an app exports its own telemetry. */
+/**
+ * How an app exports its own telemetry (ADR 0016). Each call runs in an `action <name>` span under
+ * the platform's span, and every callback names that span in its `trace` member.
+ */
 export type Observability = {
   /**
    * Supplies the logger and tracer, such as OTLP layers or a vendor `Tracer`. The SDK borrows it
@@ -25,8 +24,9 @@ export type CallInfo = { name: string; installId: string; tenantId: string; call
 
 /**
  * Run `work` in a server span under `parent`, the span the platform sent. `work` gets a Platform
- * whose calls are client spans of it, and a log function that follows `observability.logs`. `connect`
- * builds the Platform for this span. The original error of `work` is rethrown unchanged.
+ * whose calls are client spans of it, except `log`, and a port call is named after its port. It
+ * also gets a log function that follows `observability.logs`. `connect` builds the Platform for
+ * this span. The original error of `work` is rethrown unchanged.
  */
 export function runCall<A>(
   info: CallInfo,
@@ -51,7 +51,6 @@ export function runCall<A>(
         const platform = connect(formatTrace(span));
         const client = <B>(name: string, call: () => Promise<B>) =>
           run(Effect.tryPromise({ try: call, catch: (error) => error }).pipe(Effect.withSpan(name, { kind: "client", parent: span })));
-        // Every method but `log` is a client span. A port call is named after its port.
         const traced: Platform = {
           call: (method, params) => {
             if (method === "log") return platform.call(method, params);

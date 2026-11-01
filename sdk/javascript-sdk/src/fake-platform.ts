@@ -90,7 +90,6 @@ export function fakePlatform<M extends Manifest>(
     }
     let response: JsonRpcResponse;
     try {
-      // Params come off the wire unchecked, as in `createHandler`.
       response = { jsonrpc: "2.0", id: request.id, result: await call(request.method, request.params as never) };
     } catch (error) {
       if (!(error instanceof RpcError)) throw error;

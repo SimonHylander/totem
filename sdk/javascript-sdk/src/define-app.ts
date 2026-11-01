@@ -21,7 +21,6 @@ type LifecycleOptions = {
  */
 export type Remote = { parent: TraceParent | undefined; connect: (trace: TraceMetadata) => Platform };
 
-/** A call reaches the platform through a given Platform, or through `createHandler`'s Remote. */
 type Source = { platform: Platform; remote?: undefined } | { platform?: undefined; remote: Remote };
 
 function remoteOf(source: Source): Remote {

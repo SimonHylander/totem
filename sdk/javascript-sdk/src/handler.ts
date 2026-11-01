@@ -16,7 +16,7 @@ import type { AnyApp, App, Remote } from "./define-app.js";
 import { logFailure, type Observability } from "./observability.js";
 import { platformClient } from "./platform.js";
 
-type HandlerOptions = {
+export type HandlerOptions = {
   /** Shared secret issued by the platform at registration. Verifies every request. */
   secret: string;
   /** Known before `initialize` runs, for apps restarted after registration. */
@@ -28,6 +28,7 @@ type HandlerOptions = {
 /**
  * The driving adapter. Turns a signed JSON-RPC request into handler calls
  * and a JSON-RPC response. Framework free: `Request` in, `Response` out.
+ * The `trace` member is read only after the signature verifies (ADR 0016).
  */
 export function createHandler<M extends Manifest>(typedApp: App<M>, options: HandlerOptions) {
   const app = typedApp as unknown as AnyApp;
@@ -35,7 +36,6 @@ export function createHandler<M extends Manifest>(typedApp: App<M>, options: Han
 
   const observability = options.observability ?? {};
 
-  /** Callbacks for one call, each naming the call's span in its `trace` member. */
   const remoteFor = (token: string, parent: TraceParent | undefined): Remote => {
     const url = platformUrl;
     if (!url) throw new RpcError(ErrorCode.InvalidRequest, "platformUrl unknown; call initialize first");
@@ -102,7 +102,6 @@ export function createHandler<M extends Manifest>(typedApp: App<M>, options: Han
     }
 
     try {
-      // The signature has verified, so the trace member can be read (ADR 0016).
       const result = await methods[parsed.method](parsed.params as never, parseTrace(parsed.trace));
       return reply(parsed.id, { result });
     } catch (error) {

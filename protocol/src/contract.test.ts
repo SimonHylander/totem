@@ -12,31 +12,24 @@ import type {
   SignedPlatformMethods,
 } from "./types.js";
 
-// The JSON Schemas are the contract (ADR 0004) and types.ts mirrors them by hand. Each fixture below
-// is typed with the TypeScript mirror and validated against the schema, so a field that one side
-// adds, removes or renames fails here. The mapped fixture types force at least one fixture per
-// TypeScript method, and the method lists are compared with the schemas' `$defs`. Fixtures fill every
-// optional field and every union member, so a rename on either side cannot go unexercised.
-
 const schema = (file: string) => JSON.parse(readFileSync(new URL(`../${file}`, import.meta.url), "utf8")) as { $id: string; $defs?: object };
 const files = ["manifest", "context", "app-methods", "platform-methods", "trace"].map((name) => schema(`${name}.schema.json`));
 
-// Manifests reference the draft 2020-12 meta-schema, which needs non-strict mode (protocol/README.md).
+// quirk: Ajv strict mode rejects the draft 2020-12 meta-schema that manifests reference (protocol/README.md).
 const ajv = new Ajv2020({ strict: false, allErrors: true });
 addFormats.default(ajv);
 for (const file of files) ajv.addSchema(file);
 
 const idOf = (name: string) => `https://totem.dev/protocol/1/${name}.schema.json`;
-/** A `$defs` entry's `params` or `result` schema. Method names hold "/", which JSON Pointer escapes as "~1". */
+const escapeJsonPointer = (segment: string) => segment.replaceAll("/", "~1");
 const methodRef = (file: string, method: string, part: "params" | "result") =>
-  `${idOf(file)}#/$defs/${method.replaceAll("/", "~1")}/${part}`;
+  `${idOf(file)}#/$defs/${escapeJsonPointer(method)}/${part}`;
 const valid = (ref: string, value: unknown) => {
   const validate = ajv.getSchema(ref);
   if (!validate) throw new Error(`no schema ${ref}`);
   return validate(value) ? true : validate.errors;
 };
 
-/** One or more `{ params, result }` cases per method. */
 type Fixtures<M> = { [K in keyof M]: readonly [M[K], ...M[K][]] };
 
 const context = { tenantId: "acme", installId: "i-1", config: { region: "eu" } } satisfies InstallContext;

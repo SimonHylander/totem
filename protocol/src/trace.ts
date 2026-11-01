@@ -1,6 +1,4 @@
-// Trace metadata (ADR 0016). Mirrors `trace.schema.json`. A request carries it as its `trace` member.
-
-/** The `trace` member of a JSON-RPC request. */
+/** Trace metadata (ADR 0016), the `trace` member of a JSON-RPC request. Mirrors `trace.schema.json`. */
 export type TraceMetadata = { traceparent: string };
 
 /** The span a request continues, decoded from `TraceMetadata`. */
