@@ -18,7 +18,7 @@ Run detectors from the repo root. `.rgignore` keeps generated files and the HubS
 ### W2 Type assertions with `as`
 
 - **Severity:** S1
-- **Detect:** `rg -nP '^(?!\s*(//|/?\*)).*[\w)\]>]\s+as\s+(?!const\b)(unknown|never|readonly|[A-Z{\[(])' -t ts .`
+- **Detect:** `rg -nP '^(?!\s*(//|/?\*|import\b|export\s*(type\s*)?\{)).*[\w)\]>}"]\s+as\s+(?!const\b)(unknown|never|readonly|string|number|boolean|typeof|keyof|[A-Z{\[("])' -t ts .`
 - **Rule:** unenforced. Candidate: `@typescript-eslint/consistent-type-assertions` with `assertionStyle: "never"`, baselined.
 - **Replace with:** paved path "Validation at I/O boundaries" for parsed data. Elsewhere, a type guard or `satisfies`.
 
@@ -53,7 +53,7 @@ Run detectors from the repo root. `.rgignore` keeps generated files and the HubS
 ### W7 Plain `string` IDs
 
 - **Severity:** S1
-- **Detect:** `rg -nP '\w+Id\??:\s*string\b' packages platform/src -g '!*.test.ts' -g '!test-network.ts'`
+- **Detect:** `rg -nP '\b(?!clientId)\w+Id\??:\s*string\b' packages platform/src -g '!*.test.ts' -g '!test-network.ts'`. An OAuth `clientId` belongs to the provider, so it stays a `string`.
 - **Rule:** `no-restricted-syntax` with `noStringIds`, on packages only. The platform is unenforced.
 - **Replace with:** paved path "IDs". An ID with no brand yet, such as `bindingId`, gets one in `@totem/ids`.
 
