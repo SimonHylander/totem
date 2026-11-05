@@ -1,3 +1,5 @@
+import { Effect, Schema } from "effect";
+
 // The rules for running events: capacity, the waitlist, registering twice, check-in and what happens
 // when the CRM fails. This module knows nothing about Totem. Its caller supplies storage, the CRM and
 // logging.
@@ -16,23 +18,24 @@ type Attendee = Person & {
 
 type Event = { id: string; name: string; capacity: number; attendees: Attendee[] };
 
-type Log = (message: string, data?: Record<string, unknown>) => Promise<void>;
+type Log<E> = (message: string, data?: Record<string, unknown>) => Effect.Effect<void, E>;
 
-type Dependencies = {
+/** `E` is how the caller's storage and logging fail. A CRM failure never fails an operation. */
+type Dependencies<E> = {
   store: {
-    get<T>(key: string): Promise<T | null>;
-    set(key: string, value: unknown): Promise<void>;
+    get<T>(key: string): Effect.Effect<T | null, E>;
+    set(key: string, value: unknown): Effect.Effect<void, E>;
     /** Store `f(current)` and return it, atomically per key. `f` can run more than once. */
-    update<T>(key: string, f: (current: T | null) => T): Promise<T>;
+    update<T>(key: string, f: (current: T | null) => T): Effect.Effect<T, E>;
   };
-  upsertContact: (person: Person) => Promise<{ contactId: string }>;
-  log: { info: Log; warn: Log };
+  upsertContact: (person: Person) => Effect.Effect<{ contactId: string }, unknown>;
+  log: { info: Log<E>; warn: Log<E> };
 };
 
-/** Thrown for an event ID the store does not have. */
-export class EventNotFound extends Error {
-  constructor(id: string) {
-    super(`no event ${id}`);
+/** An event ID the store does not have. */
+export class EventNotFound extends Schema.TaggedError<EventNotFound>()("EventNotFound", { id: Schema.String }) {
+  override get message() {
+    return `no event ${this.id}`;
   }
 }
 
@@ -55,41 +58,38 @@ function placement(attendees: Attendee[], attendee: Attendee) {
 }
 
 /** The operations on one tenant's events. Each one reads and writes through `store`. */
-export function createEvents({ store, upsertContact, log }: Dependencies) {
-  async function loadEvent(id: string): Promise<Event> {
-    const event = await store.get<Event>(eventKey(id));
-    if (!event) throw new EventNotFound(id);
+export function createEvents<E>({ store, upsertContact, log }: Dependencies<E>) {
+  const loadEvent = Effect.fnUntraced(function* (id: string) {
+    const event = yield* store.get<Event>(eventKey(id));
+    if (!event) return yield* new EventNotFound({ id });
     return event;
-  }
+  });
 
   /** Store `f(event)` for a stored event and return it. `f` can run more than once, as `store.update` retries. */
-  function updateEvent(id: string, f: (event: Event) => Event): Promise<Event> {
-    return store.update<Event>(eventKey(id), (event) => {
-      if (!event) throw new EventNotFound(id);
-      return f(event);
-    });
-  }
+  const updateEvent = Effect.fnUntraced(function* (id: string, f: (event: Event) => Event) {
+    const saved = yield* store.update<Event | null>(eventKey(id), (event) => event && f(event));
+    if (!saved) return yield* new EventNotFound({ id });
+    return saved;
+  });
 
   return {
-    async createEvent({ name, capacity }: { name: string; capacity: number }) {
+    createEvent: Effect.fnUntraced(function* ({ name, capacity }: { readonly name: string; readonly capacity: number }) {
       const event: Event = { id: crypto.randomUUID().slice(0, 8), name, capacity, attendees: [] };
-      await store.set(eventKey(event.id), event);
-      await store.update<string[]>(EVENTS, (ids) => [...(ids ?? []), event.id]);
+      yield* store.set(eventKey(event.id), event);
+      yield* store.update<string[]>(EVENTS, (ids) => [...(ids ?? []), event.id]);
       return { eventId: event.id };
-    },
+    }),
 
-    async listEvents() {
-      const ids = (await store.get<string[]>(EVENTS)) ?? [];
-      const events = await Promise.all(ids.map(loadEvent));
+    listEvents: Effect.fnUntraced(function* () {
+      const ids = (yield* store.get<string[]>(EVENTS)) ?? [];
+      const events = yield* Effect.forEach(ids, loadEvent, { concurrency: "unbounded" });
       return { events: events.map(summary) };
-    },
+    }),
 
-    async eventInfo({ eventId }: { eventId: string }) {
-      return summary(await loadEvent(eventId));
-    },
+    eventInfo: ({ eventId }: { readonly eventId: string }) => loadEvent(eventId).pipe(Effect.map(summary)),
 
-    async register({ eventId, email, firstName, lastName }: Person & { eventId: string }) {
-      const event = await loadEvent(eventId);
+    register: Effect.fnUntraced(function* ({ eventId, email, firstName, lastName }: Readonly<Person> & { readonly eventId: string }) {
+      const event = yield* loadEvent(eventId);
       const key = normalize(email);
       const existing = event.attendees.find((a) => a.email === key);
       if (existing) return placement(event.attendees, existing);
@@ -100,15 +100,15 @@ export function createEvents({ store, upsertContact, log }: Dependencies) {
         ...(lastName !== undefined && { lastName }),
       };
       // The registration stands even when the CRM is down or not bound.
-      let crmContactId: string | null = null;
-      try {
-        crmContactId = (await upsertContact(person)).contactId;
-      } catch (error) {
-        await log.warn("CRM sync failed", { email: key, error: error instanceof Error ? error.message : String(error) });
-      }
+      const crmContactId = yield* upsertContact(person).pipe(
+        Effect.map(({ contactId }): string | null => contactId),
+        Effect.catch((error) =>
+          log.warn("CRM sync failed", { email: key, error: error instanceof Error ? error.message : String(error) }).pipe(Effect.as(null)),
+        ),
+      );
 
       // Seats are counted on the event as stored now, which may have changed during the CRM call.
-      const saved = await updateEvent(eventId, (current) =>
+      const saved = yield* updateEvent(eventId, (current) =>
         current.attendees.some((a) => a.email === key)
           ? current
           : {
@@ -121,26 +121,26 @@ export function createEvents({ store, upsertContact, log }: Dependencies) {
       );
       // The update above always leaves this attendee on the event.
       const attendee = saved.attendees.find((a) => a.email === key)!;
-      await log.info(`${attendee.status} for ${saved.name}`, { email: key });
+      yield* log.info(`${attendee.status} for ${saved.name}`, { email: key });
       return placement(saved.attendees, attendee);
-    },
+    }),
 
-    async checkIn({ eventId, email }: { eventId: string; email: string }) {
+    checkIn: Effect.fnUntraced(function* ({ eventId, email }: { readonly eventId: string; readonly email: string }) {
       const key = normalize(email);
-      const saved = await updateEvent(eventId, (event) => ({
+      const saved = yield* updateEvent(eventId, (event) => ({
         ...event,
         attendees: event.attendees.map((a) => (a.email === key && a.status === "registered" ? { ...a, checkedIn: true } : a)),
       }));
       return { checkedIn: saved.attendees.some((a) => a.email === key && a.checkedIn) };
-    },
+    }),
 
-    async listAttendees({ eventId }: { eventId: string }) {
-      const { attendees } = await loadEvent(eventId);
+    listAttendees: Effect.fnUntraced(function* ({ eventId }: { readonly eventId: string }) {
+      const { attendees } = yield* loadEvent(eventId);
       const view = ({ status: _status, ...rest }: Attendee) => rest;
       return {
         registered: attendees.filter((a) => a.status === "registered").map(view),
         waitlist: attendees.filter((a) => a.status === "waitlisted").map(view),
       };
-    },
+    }),
   };
 }

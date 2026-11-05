@@ -1,60 +1,32 @@
-import type { Manifest } from "@totem/sdk";
+import { Totem } from "@totem/sdk";
+import { Schema } from "effect";
 
-const contact = {
-  type: "object",
-  required: ["contactId", "email", "firstName", "lastName"],
-  properties: {
-    contactId: { type: "string" },
-    email: { type: "string" },
-    firstName: { type: ["string", "null"] },
-    lastName: { type: ["string", "null"] },
-  },
-  additionalProperties: false,
-} as const;
+const Contact = Schema.Struct({
+  contactId: Schema.String,
+  email: Schema.String,
+  firstName: Schema.NullOr(Schema.String),
+  lastName: Schema.NullOr(Schema.String),
+});
 
-export const manifest = {
+export const manifest = Totem.Manifest({
   name: "hubspot",
   version: "0.1.0",
-  protocol: "1",
   description: "Creates, updates and reads contacts in HubSpot CRM.",
   provides: {
     actions: {
       upsertContact: {
         description: "Create a contact, or update the contact with the same email.",
-        input: {
-          type: "object",
-          required: ["email"],
-          properties: {
-            email: { type: "string" },
-            firstName: { type: "string" },
-            lastName: { type: "string" },
-          },
-          additionalProperties: false,
-        },
-        output: {
-          type: "object",
-          required: ["contactId", "created"],
-          properties: {
-            contactId: { type: "string" },
-            created: { type: "boolean" },
-          },
-          additionalProperties: false,
-        },
+        input: Schema.Struct({
+          email: Schema.String,
+          firstName: Schema.optionalKey(Schema.String),
+          lastName: Schema.optionalKey(Schema.String),
+        }),
+        output: Schema.Struct({ contactId: Schema.String, created: Schema.Boolean }),
       },
       getContact: {
         description: "Read a contact by email. `contact` is null when HubSpot has none.",
-        input: {
-          type: "object",
-          required: ["email"],
-          properties: { email: { type: "string" } },
-          additionalProperties: false,
-        },
-        output: {
-          type: "object",
-          required: ["contact"],
-          properties: { contact: { anyOf: [contact, { type: "null" }] } },
-          additionalProperties: false,
-        },
+        input: Schema.Struct({ email: Schema.String }),
+        output: Schema.Struct({ contact: Schema.NullOr(Contact) }),
       },
     },
   },
@@ -70,4 +42,4 @@ export const manifest = {
       },
     },
   },
-} as const satisfies Manifest;
+});
