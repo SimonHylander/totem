@@ -3,10 +3,6 @@ import { createPlatform, listen } from "@totem/platform";
 import { serve } from "@totem/sdk/serve";
 import { app as hubspot } from "@totem/example-hubspot";
 
-// Runs the platform, the HubSpot app, and this events app (a TanStack Start dev server), with the
-// `upsertContact` port bound to the HubSpot install. `pnpm live` at the repo root builds the
-// dependencies and starts this script. HubSpot credentials come from examples/hubspot/.env.local.
-
 const PLATFORM = "http://localhost:3000";
 const EVENTS = "http://localhost:3003";
 
@@ -29,7 +25,6 @@ const platform = createPlatform({
 });
 await listen(platform.handle, PLATFORM);
 
-/** Calls the management API and throws on a failed response. */
 async function api<T>(token: string, method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(PLATFORM + path, {
     method,
@@ -41,7 +36,6 @@ async function api<T>(token: string, method: string, path: string, body?: unknow
   return json as T;
 }
 
-/** Registers an app URL and returns its ID and HMAC secret. */
 const register = (url: string) => api<{ appId: string; secret: string }>(operator, "POST", "/api/apps", { url });
 
 const hubspotApp = await register("http://localhost:3002/");
@@ -68,7 +62,6 @@ const invoke = <T>(action: string, input: unknown) =>
 const launch = await invoke<{ eventId: string }>("createEvent", { name: "Totem launch", capacity: 2 });
 await invoke("createEvent", { name: "HubSpot workshop", capacity: 20 });
 
-// The UI serves one install, and the first start ran before that install existed. Restart with its ID.
 await stop(vite);
 await startEvents({ EVENTS_INSTALL_ID: events.installId });
 
@@ -94,15 +87,14 @@ Tenant acme has one events install with two events. Its upsertContact port is bo
      -H 'authorization: Bearer ${tenantAdmin}' -H 'content-type: application/json' -d '{"input":{"eventId":"${launch.eventId}"}}'
 `);
 
-/** Starts the events dev server with its secret plus the `extra` variables, and waits until it answers. */
 async function startEvents(extra: Record<string, string>) {
+  const inUse = await fetch(EVENTS).then(() => true, () => false);
+  if (inUse) throw new Error(`${EVENTS} is already in use`);
   const child = spawn("vite", ["dev", "--port", "3003", "--strictPort"], {
     env: { ...process.env, TOTEM_APP_SECRET: eventsApp.secret, TOTEM_PLATFORM_URL: `${PLATFORM}/rpc`, ...extra },
     stdio: "inherit",
   });
   process.on("exit", () => child.kill());
-  // Fail if the dev server exits early, for example because :3003 is in use. Another server on
-  // :3003 would otherwise answer `waitFor` and look like a successful start.
   const exited = new Promise<never>((_, reject) => child.once("exit", (code) => reject(new Error(`vite exited with ${code}`))));
   await Promise.race([waitFor(EVENTS), exited]);
   return child;
@@ -115,7 +107,6 @@ function stop(child: ChildProcess): Promise<void> {
   });
 }
 
-/** Polls a URL until it answers, for up to 30 seconds. */
 async function waitFor(url: string): Promise<void> {
   for (let attempt = 0; attempt < 60; attempt++) {
     try {

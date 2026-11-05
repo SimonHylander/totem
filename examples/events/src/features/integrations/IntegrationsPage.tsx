@@ -8,7 +8,6 @@ const route = getRouteApi("/integrations");
 
 type Listing = Awaited<ReturnType<typeof getIntegrations>>[number];
 
-/** The change that is running on a port. */
 type Change = { kind: "on" | "off"; appId: string } | { kind: "connect"; appId: string; credential: string };
 
 export function IntegrationsPage() {
@@ -23,13 +22,11 @@ export function IntegrationsPage() {
   );
 }
 
-/** One port and the apps that can fill it. A port holds one app, so turning one on replaces the current one. */
 function PortApps({ port, description, binding, candidates }: Listing) {
   const router = useRouter();
   const [change, setChange] = useState<Change | null>(null);
   const [failedApp, setFailedApp] = useState<string | null>(null);
 
-  /** Runs one change, then reloads the list. Does nothing while another change is running. */
   const run = async (next: Change, action: () => Promise<unknown>) => {
     if (change) return;
     setChange(next);

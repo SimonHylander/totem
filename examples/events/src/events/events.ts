@@ -1,13 +1,5 @@
 import { Effect, Schema } from "effect";
 
-// The rules for running events: capacity, the waitlist, registering twice, check-in, and what happens
-// when the CRM fails. This module does not depend on Totem. Its caller supplies storage, the CRM, and
-// logging.
-//
-// Each event is stored under `event:<id>`, and `events` lists the IDs oldest first. Every change to an
-// existing value goes through `store.update`, so concurrent calls do not lose each other's writes or
-// give the last seat twice.
-
 type Person = { email: string; firstName?: string; lastName?: string };
 
 type Attendee = Person & {
@@ -20,11 +12,9 @@ type Event = { id: string; name: string; capacity: number; attendees: Attendee[]
 
 type Log<E> = (message: string, data?: Record<string, unknown>) => Effect.Effect<void, E>;
 
-/** `E` is how the caller's storage and logging fail. A CRM failure never fails an operation. */
 type Dependencies<E> = {
   store: {
     get<T>(key: string): Effect.Effect<T | null, E>;
-    set(key: string, value: unknown): Effect.Effect<void, E>;
     /** Store `f(current)` and return it, atomically per key. `f` can run more than once. */
     update<T>(key: string, f: (current: T | null) => T): Effect.Effect<T, E>;
   };
@@ -32,7 +22,6 @@ type Dependencies<E> = {
   log: { info: Log<E>; warn: Log<E> };
 };
 
-/** An event ID the store does not have. */
 export class EventNotFound extends Schema.TaggedError<EventNotFound>()("EventNotFound", { id: Schema.String }) {
   override get message() {
     return `no event ${this.id}`;
@@ -51,7 +40,6 @@ function normalize(email: string): string {
   return email.trim().toLowerCase();
 }
 
-/** The attendee's status, 1-based position among attendees of that status, and CRM contact ID. */
 function placement(attendees: Attendee[], attendee: Attendee) {
   const position = attendees.filter((a) => a.status === attendee.status).indexOf(attendee) + 1;
   return { status: attendee.status, position, crmContactId: attendee.crmContactId };
@@ -65,7 +53,6 @@ export function createEvents<E>({ store, upsertContact, log }: Dependencies<E>) 
     return event;
   });
 
-  /** Store `f(event)` for a stored event and return it. `store.update` can retry, so `f` can run more than once. */
   const updateEvent = Effect.fnUntraced(function* (id: string, f: (event: Event) => Event) {
     const saved = yield* store.update<Event | null>(eventKey(id), (event) => event && f(event));
     if (!saved) return yield* new EventNotFound({ id });
@@ -75,7 +62,7 @@ export function createEvents<E>({ store, upsertContact, log }: Dependencies<E>) 
   return {
     createEvent: Effect.fnUntraced(function* ({ name, capacity }: { readonly name: string; readonly capacity: number }) {
       const event: Event = { id: crypto.randomUUID().slice(0, 8), name, capacity, attendees: [] };
-      yield* store.set(eventKey(event.id), event);
+      yield* store.update<Event>(eventKey(event.id), () => event);
       yield* store.update<string[]>(EVENTS, (ids) => [...(ids ?? []), event.id]);
       return { eventId: event.id };
     }),
@@ -99,7 +86,6 @@ export function createEvents<E>({ store, upsertContact, log }: Dependencies<E>) 
         ...(firstName !== undefined && { firstName }),
         ...(lastName !== undefined && { lastName }),
       };
-      // The registration succeeds even when the CRM call fails or no CRM is bound.
       const crmContactId = yield* upsertContact(person).pipe(
         Effect.map(({ contactId }): string | null => contactId),
         Effect.catch((error) =>
@@ -107,7 +93,6 @@ export function createEvents<E>({ store, upsertContact, log }: Dependencies<E>) 
         ),
       );
 
-      // Count seats on the event as stored now, because it can change during the CRM call.
       const saved = yield* updateEvent(eventId, (current) =>
         current.attendees.some((a) => a.email === key)
           ? current
