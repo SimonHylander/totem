@@ -8,7 +8,7 @@ const route = getRouteApi("/integrations");
 
 type Listing = Awaited<ReturnType<typeof getIntegrations>>[number];
 
-/** The change in flight on a port. */
+/** The change that is running on a port. */
 type Change = { kind: "on" | "off"; appId: string } | { kind: "connect"; appId: string; credential: string };
 
 export function IntegrationsPage() {
@@ -23,13 +23,13 @@ export function IntegrationsPage() {
   );
 }
 
-/** One port and the apps that can fill it. A port holds one app, so turning one on replaces the other. */
+/** One port and the apps that can fill it. A port holds one app, so turning one on replaces the current one. */
 function PortApps({ port, description, binding, candidates }: Listing) {
   const router = useRouter();
   const [change, setChange] = useState<Change | null>(null);
   const [failedApp, setFailedApp] = useState<string | null>(null);
 
-  /** Run one change, then reload the list. */
+  /** Runs one change, then reloads the list. Does nothing while another change is running. */
   const run = async (next: Change, action: () => Promise<unknown>) => {
     if (change) return;
     setChange(next);
@@ -78,7 +78,7 @@ function PortApps({ port, description, binding, candidates }: Listing) {
                         </p>
                       );
                     }
-                    // The button stays mounted while the provider URL loads, so focus survives a failure.
+                    // The button stays mounted while the provider URL loads, so it keeps focus if the request fails.
                     const opening = change?.kind === "connect" && change.credential === name;
                     return (
                       <div key={name}>
@@ -123,7 +123,7 @@ function PortApps({ port, description, binding, candidates }: Listing) {
           );
         })}
       </ul>
-      {candidates.length > 1 && <p className="apps-note">A port holds one app. Turning one on turns the other off.</p>}
+      {candidates.length > 1 && <p className="apps-note">Only one app can do this at a time. Turning one on turns off the current one.</p>}
     </section>
   );
 }

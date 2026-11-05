@@ -16,7 +16,7 @@ export const disable = createServerFn({ method: "POST" })
   .validator((data: unknown) => ({ port: port(data) }))
   .handler(({ data }) => totem().client.unbind(eventsInstall(), data.port));
 
-/** Returns the provider URL. The platform rejects a `returnTo` off this app's origin. */
+/** Returns the provider URL. The platform rejects a `returnTo` outside this app's origin. */
 export const connect = createServerFn({ method: "POST" })
   .validator((data: unknown) => ({ port: port(data), credential: field(data, "credential"), returnTo: field(data, "returnTo") }))
   .handler(({ data }) => totem().client.connect(eventsInstall(), data.port, data.credential, data.returnTo));

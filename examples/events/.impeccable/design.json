@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-01T11:55:00+00:00",
+  "generatedAt": "2026-11-05T12:00:00+00:00",
   "title": "Design System: Events",
   "extensions": {
     "colorMeta": {
@@ -170,19 +170,19 @@
       },
       "title": {
         "displayName": "Title",
-        "purpose": "Event names in the list and the result line after registering."
+        "purpose": "Event names in the list, app names, and the result line after registering."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Ledes, notices, the email input, the attendee's own number (700)."
+        "purpose": "Ledes, notices, field input text, the line preview, and the attendee's own number (700)."
       },
       "label": {
         "displayName": "Label",
-        "purpose": "Field labels at 500. At 400 in Ink 3: line numbers, taken, range lines, the sync line."
+        "purpose": "Field labels at 500. At 400 in Ink 3, line numbers, \"taken\", range lines, and the sync line."
       },
       "caption": {
         "displayName": "Caption",
-        "purpose": "The capacity rule label and the sub-line under a signed name."
+        "purpose": "The capacity rule label, the sub-line under a signed name, and the integrations caption."
       }
     },
     "shadows": [
@@ -201,7 +201,7 @@
       {
         "name": "write",
         "value": "520ms clip-path inset(0 100% 0 0) to inset(0 0 0 0)",
-        "purpose": "The attendee's name is written onto their line. Removed under reduced motion."
+        "purpose": "The attendee's name appears on their line, left to right. Removed under reduced motion."
       },
       {
         "name": "button-color",
@@ -222,7 +222,7 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The one primary action on a page. Full width, names the outcome with the number.",
+      "description": "The one primary action on a page. It is full width, and its label names the outcome and, for a seat, its number.",
       "html": "<button class=\"ds-submit\">Take seat 7</button>",
       "css": ".ds-submit { width: 100%; height: 50px; border: 0; border-radius: 8px; background: var(--accent, #2f5bd3); color: var(--accent-ink, #ffffff); font: 600 1rem/1.5 \"Figtree Variable\", ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; cursor: pointer; transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-submit:hover { background: color-mix(in oklab, var(--accent, #2f5bd3) 88%, #000000); } .ds-submit:focus-visible { outline: 2px solid var(--accent, #2f5bd3); outline-offset: 2px; }"
     },
@@ -230,7 +230,7 @@
       "name": "Name Field",
       "kind": "input",
       "refersTo": "field-input",
-      "description": "Optional name field with label above and an optional hint.",
+      "description": "A name field with a label above it and an \"optional\" hint.",
       "html": "<label class=\"ds-field\"><span>First name <em>optional</em></span><input /></label>",
       "css": ".ds-field { display: grid; gap: 6px; font: 500 0.875rem/1.5 \"Figtree Variable\", ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; color: var(--ink, #18181b); max-width: 16rem; } .ds-field em { font-style: normal; font-weight: 400; color: var(--ink-3, #71717a); } .ds-field input { height: 44px; padding: 0 12px; border: 1px solid var(--taken, #d4d4d8); border-radius: 8px; background: var(--ground, #ffffff); font: 400 1rem/1.5 \"Figtree Variable\", ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; color: var(--ink, #18181b); } .ds-field input:hover { border-color: var(--ink-3, #71717a); } .ds-field input:focus-visible { outline: none; border-color: var(--accent, #2f5bd3); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent, #2f5bd3) 22%, transparent); }"
     },
@@ -246,7 +246,7 @@
       "name": "Event Row",
       "kind": "custom",
       "refersTo": "event-row",
-      "description": "One event per whole-row link, count in a fixed tabular column.",
+      "description": "One whole-row link per event, with the count in a fixed tabular column.",
       "html": "<ul class=\"ds-events\"><li><a href=\"#\"><span class=\"ds-event-name\">HubSpot workshop</span><span class=\"ds-event-count\"><b>20</b> of 20 open</span></a></li><li><a href=\"#\"><span class=\"ds-event-name\">Totem launch</span><span class=\"ds-event-count\"><b>Full</b> · waitlist open</span></a></li></ul>",
       "css": ".ds-events { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line-strong, #18181b); font: 400 1rem/1.5 \"Figtree Variable\", ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-variant-numeric: tabular-nums; } .ds-events li { border-bottom: 1px solid var(--line, #e4e4e7); } .ds-events a { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 16px; min-height: 64px; padding: 18px 0; color: var(--ink, #18181b); text-decoration: none; } .ds-event-name { font-size: 1.0625rem; font-weight: 600; } .ds-events a:hover .ds-event-name { text-decoration: underline; text-decoration-color: var(--taken, #d4d4d8); } .ds-events a:focus-visible { outline: 2px solid var(--accent, #2f5bd3); outline-offset: 2px; } .ds-event-count { min-width: 7.5rem; text-align: right; color: var(--ink-2, #52525b); white-space: nowrap; } .ds-event-count b { color: var(--ink, #18181b); font-weight: 600; }"
     },
@@ -262,36 +262,36 @@
       "name": "Signed Line",
       "kind": "custom",
       "refersTo": "sheet-row-you",
-      "description": "After submit the attendee's name is written onto their line, number unmoved.",
+      "description": "After submit, the attendee's name appears on their line, and the number stays the same.",
       "html": "<ol class=\"ds-sheet-signed\"><li class=\"ds-you-signed\"><span class=\"ds-num\">6</span><span><span class=\"ds-name\">Ada Lovelace</span><span class=\"ds-sub\">Your seat</span></span></li></ol>",
       "css": ".ds-sheet-signed { list-style: none; margin: 0; padding: 0; font: 400 1rem/1.5 \"Figtree Variable\", ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-variant-numeric: tabular-nums; color: var(--ink, #18181b); } .ds-you-signed { display: grid; grid-template-columns: 3.25rem 1fr; align-items: center; min-height: 48px; background: color-mix(in oklab, var(--accent, #2f5bd3) 7%, #ffffff); border-bottom: 2px solid var(--accent, #2f5bd3); } .ds-you-signed .ds-num { color: var(--accent, #2f5bd3); font-weight: 700; } .ds-name { display: block; font-weight: 600; animation: ds-write 520ms cubic-bezier(0.16, 1, 0.3, 1) both; } .ds-sub { display: block; font-size: 0.8125rem; color: var(--ink-2, #52525b); } @keyframes ds-write { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } } @media (prefers-reduced-motion: reduce) { .ds-name { animation: none; } }"
     }
   ],
   "narrative": {
     "northStar": "The Sign-up Sheet",
-    "overview": "Capacity is drawn as a numbered sheet. Every seat is a line with its number in a fixed column, taken lines say so, long runs collapse into one range line, and a heavy ink rule marks where capacity ends and the waitlist begins. The attendee sees exactly which line is theirs before they act, writes their email on it, and watches their name fill that same line on submit. The number never moves.\n\nThe world is neutral on purpose. A tenant themes the whole app by overriding one token, the accent, and everything else stays white ground, a zinc ink scale and hairline rules. Density is calm: one reading-width column on every viewport, 48px lines, no decoration. The visual vocabulary is rules, numbers and weight. Depth, imagery and color fields are absent.\n\nThe system covers the event list (`/`) and the registration page (`/events/$eventId`). `/integrations` is intentionally unstyled and is not yet brought into the system. Its markup carries no classes, and the stylesheet resets margins per class so that page keeps browser defaults.",
+    "overview": "The registration page draws capacity as a numbered sheet. Every seat is a line with its number in a fixed column. Taken lines say \"taken\", long runs collapse into one range line, and a heavy ink rule marks where capacity ends and the waitlist begins. Before submitting, the attendee sees which line is theirs, and that line previews what they type in the form below. On submit, their name appears on the same line, and a seat's number does not change.\n\nThe design is neutral so that a tenant can theme the whole app by overriding one token, the accent. Everything else stays a white ground, a zinc ink scale, and hairline rules. Every viewport gets one reading-width column with 48px lines and no decoration. Rules, numbers, and font weight create all the structure, with no depth, imagery, or color fields.\n\nThe system covers the event list (`/`), the registration page (`/events/$eventId`), and the integrations page (`/integrations`).",
     "keyCharacteristics": [
-      "One themeable accent, reserved for the attendee's own line, its number and the submit button.",
-      "Hairline rows, one strong ink rule for boundaries.",
-      "Figtree throughout with tabular numerals in a fixed number column.",
-      "Flat white ground. Shadows appear only as focus rings.",
-      "One 34rem column on phone and desktop alike."
+      "One themeable accent, reserved for the attendee's own line, its number, and the submit button.",
+      "Hairline rows, with one strong ink rule for boundaries.",
+      "Figtree throughout, with tabular numerals in a fixed number column.",
+      "A flat white ground. Shadows appear only as focus rings.",
+      "One 34rem column on phone and desktop."
     ],
     "rules": [
       {
         "name": "The Own Line Rule",
         "section": "colors",
-        "body": "The accent marks what belongs to the attendee: their line, its number, the button that claims it, and the browser surfaces they are acting through (focus, caret, selection). Links, hover states, counts, status lines and headings never take the accent."
+        "body": "The accent marks what belongs to the attendee: their line, its number, the button that claims it, and the browser focus, caret, and selection. Links, hover states, counts, status lines, and headings never use the accent."
       },
       {
         "name": "The One Token Rule",
         "section": "colors",
-        "body": "A tenant themes the app by overriding `--accent` alone. Every accent tint (wash, selection, focus rings, button hover) is a `color-mix` of `--accent`, never a separate literal."
+        "body": "A tenant themes the app by overriding `--accent` alone. Every accent tint (wash, selection, focus rings, and button hover) is a `color-mix` of `--accent`, never a separate literal."
       },
       {
         "name": "The Tabular Rule",
         "section": "typography",
-        "body": "Numerals are tabular everywhere (`font-variant-numeric: tabular-nums` on the body). Numbers sit in a fixed column: the 3.25rem number column on the sheet, a right-aligned 7.5rem minimum column on the event list."
+        "body": "Numerals are tabular everywhere (`font-variant-numeric: tabular-nums` on the body). Numbers sit in a fixed column: the 3.25rem number column on the sheet, and a right-aligned column with a 7.5rem minimum on the event list."
       },
       {
         "name": "The Weight Not Color Rule",
@@ -306,24 +306,24 @@
       {
         "name": "The Ruled Sheet Rule",
         "section": "elevation",
-        "body": "Depth is never used to group or lift content. Hairlines separate, strong ink marks a boundary, and the accent rule marks ownership."
+        "body": "Never use depth to group or lift content. Hairlines separate, strong ink marks a boundary, and the accent rule marks ownership."
       }
     ],
     "dos": [
-      "Do theme a tenant by overriding `--accent` only, and derive every accent tint with `color-mix` from it.",
-      "Do keep the accent on the attendee's own line, its number, the submit button and browser focus, caret and selection surfaces.",
+      "Do theme a tenant by overriding `--accent` only, and derive every accent tint from it with `color-mix`.",
+      "Do keep the accent on the attendee's own line, its number, the submit button, and browser focus, caret, and selection.",
       "Do put numbers in a fixed tabular column (3.25rem on the sheet, right-aligned 7.5rem on lists).",
       "Do separate rows with 1px `--line` hairlines and mark a real boundary with `--line-strong`.",
       "Do keep every page in the single 34rem column with 20px gutters.",
-      "Do honor `prefers-reduced-motion` by removing the write reveal and the button transition."
+      "Do honor `prefers-reduced-motion` by removing the write reveal and the button and switch transitions."
     ],
     "donts": [
-      "Don't use the accent for links, hover states, counts, headings or status text.",
-      "Don't add cover images, avatars or social proof.",
-      "Don't add paper texture or handwriting costume to the sheet. It is drawn with rules and numbers only.",
+      "Don't use the accent for links, hover states, counts, headings, or status text.",
+      "Don't add cover images, avatars, or social proof.",
+      "Don't add paper texture or handwriting fonts to the sheet. Draw it with rules and numbers only.",
       "Don't put an event in a centered card with a muted seats line and a black button.",
       "Don't add shadows or cards for grouping. Box shadows are for focus only.",
-      "Don't use Danger for anything except the registration error."
+      "Don't use Danger for anything except a failed registration or integration change."
     ]
   }
 }
