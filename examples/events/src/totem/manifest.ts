@@ -37,7 +37,7 @@ export const manifest = {
   name: "events",
   version: "0.2.0",
   protocol: "1",
-  description: "Runs a tenant's events: registrations up to capacity, a waitlist and check-in. Syncs attendees to a CRM.",
+  description: "Runs a tenant's events: registrations up to capacity, a waitlist, and check-in. Syncs attendees to a CRM.",
   provides: {
     actions: {
       createEvent: {
@@ -51,7 +51,7 @@ export const manifest = {
         output: { type: "object", required: ["eventId"], properties: eventId, additionalProperties: false },
       },
       listEvents: {
-        description: "Every event of this install, oldest first.",
+        description: "List every event of this install, oldest first.",
         input: { type: "object", additionalProperties: false },
         output: {
           type: "object",
@@ -61,7 +61,7 @@ export const manifest = {
         },
       },
       eventInfo: {
-        description: "One event's name, capacity and seats left.",
+        description: "Get one event's name, capacity, and seats left.",
         input: byEvent,
         output: eventSummary,
       },
@@ -73,7 +73,7 @@ export const manifest = {
           required: ["status", "position", "crmContactId"],
           properties: {
             status: { enum: ["registered", "waitlisted"] },
-            /** 1-based place among the registered, or on the waitlist. */
+            /** 1-based position among registered attendees, or on the waitlist. */
             position: { type: "integer" },
             /** Null when the CRM sync failed or no CRM is bound. */
             crmContactId: { type: ["string", "null"] },
@@ -82,7 +82,7 @@ export const manifest = {
         },
       },
       checkIn: {
-        description: "Check in a registered attendee. False for waitlisted or unknown emails.",
+        description: "Check in a registered attendee. Returns false for a waitlisted or unknown email.",
         input: {
           type: "object",
           required: ["eventId", "email"],
@@ -97,7 +97,7 @@ export const manifest = {
         },
       },
       listAttendees: {
-        description: "An event's registered attendees and waitlist, each in registration order.",
+        description: "List an event's registered attendees and waitlist, each in registration order.",
         input: byEvent,
         output: {
           type: "object",

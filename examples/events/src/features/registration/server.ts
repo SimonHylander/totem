@@ -9,7 +9,7 @@ function text(value: unknown, field: string): string {
   return value.trim();
 }
 
-/** Checks a registration. The page runs it on submit too, so the attendee's line shows what is sent. */
+/** Checks and trims a registration. The page also runs it on submit, so the attendee's line shows the sent values. */
 export function registration(data: unknown): Registration {
   const { eventId, email, firstName, lastName } = (data ?? {}) as Record<string, unknown>;
   const optional = (value: unknown, field: string) => (value === undefined || value === "" ? undefined : text(value, field));

@@ -1,6 +1,6 @@
-// The sign-up sheet the registration page draws. An event's capacity is a list of numbered lines,
-// and the waitlist continues below them. The page never shows every line: long runs of taken or
-// open lines collapse into one range row, so an event of 500 seats draws about as many rows as one of 20.
+// The sign-up sheet that the registration page draws. An event's capacity is a list of numbered
+// lines, and the waitlist continues below them. Long runs of taken or open lines collapse into one
+// range row, so an event of 500 seats draws about as many rows as an event of 20.
 
 /** Where the attendee's own line sits. `position` is unknown on the waitlist until they register. */
 export type Spot = { list: "seats" | "waitlist"; position: number | undefined };
@@ -12,8 +12,8 @@ export type Row =
   | { kind: "rule"; capacity: number };
 
 /**
- * The spot a new registration would get, matching the app's `register`: the next free seat, or
- * the waitlist when the event is full.
+ * The spot that a new registration would get: the next free seat, or the waitlist when the event
+ * is full. This matches the app's `register` action.
  */
 export function nextSpot(capacity: number, seatsLeft: number): Spot {
   return seatsLeft > 0 ? { list: "seats", position: capacity - seatsLeft + 1 } : { list: "waitlist", position: undefined };
@@ -48,7 +48,7 @@ function run(list: Spot["list"], state: "taken" | "open", from: number, to: numb
   const count = to - from + 1;
   if (count <= 0) return [];
   const line = (number: number): Row => ({ kind: "line", list, number, state });
-  // A range that would hide a single line is just that line.
+  // Draw the lines when a range would hide only one.
   if (count <= head + tail + 1) return Array.from({ length: count }, (_, i) => line(from + i));
   return [
     ...Array.from({ length: head }, (_, i) => line(from + i)),

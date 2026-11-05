@@ -1,7 +1,7 @@
 import type { Row, Spot } from "./sheet.js";
 import type { registerAttendee } from "./server.js";
 
-/** What the attendee wrote on their line, shown once they hold it. */
+/** The registration result and the text on the attendee's line, once they have registered. */
 export type Signed = { result: Awaited<ReturnType<typeof registerAttendee>>; name: string };
 
 export function rowKey(row: Row): string {
@@ -18,8 +18,8 @@ export function rowKey(row: Row): string {
 }
 
 /**
- * One row of the sheet. The attendee's own row previews `draft` until they are signed, then
- * shows their name.
+ * One row of the sheet. The attendee's own row previews `draft` until they register, then shows
+ * `signed.name`.
  */
 export function SheetRow({ row, signed, draft }: { row: Row; signed: Signed | null; draft: string }) {
   const prefix = (list: Spot["list"]) => (list === "waitlist" ? "W" : "");

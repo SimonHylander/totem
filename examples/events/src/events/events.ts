@@ -1,10 +1,10 @@
-// The rules for running events: capacity, the waitlist, registering twice, check-in and what happens
-// when the CRM fails. This module knows nothing about Totem. Its caller supplies storage, the CRM and
+// The rules for running events: capacity, the waitlist, registering twice, check-in, and what happens
+// when the CRM fails. This module does not depend on Totem. Its caller supplies storage, the CRM, and
 // logging.
 //
-// Each event lives in the store under `event:<id>`, and `events` lists the IDs oldest first. Every
-// change to a stored value goes through `store.update`, so calls that land at the same moment do not
-// lose each other's writes or give the last seat twice.
+// Each event is stored under `event:<id>`, and `events` lists the IDs oldest first. Every change to an
+// existing value goes through `store.update`, so concurrent calls do not lose each other's writes or
+// give the last seat twice.
 
 type Person = { email: string; firstName?: string; lastName?: string };
 
@@ -48,7 +48,7 @@ function normalize(email: string): string {
   return email.trim().toLowerCase();
 }
 
-/** The attendee's status, with its 1-based position among attendees of the same status. */
+/** The attendee's status, 1-based position among attendees of that status, and CRM contact ID. */
 function placement(attendees: Attendee[], attendee: Attendee) {
   const position = attendees.filter((a) => a.status === attendee.status).indexOf(attendee) + 1;
   return { status: attendee.status, position, crmContactId: attendee.crmContactId };
@@ -62,7 +62,7 @@ export function createEvents({ store, upsertContact, log }: Dependencies) {
     return event;
   }
 
-  /** Store `f(event)` for a stored event and return it. `f` can run more than once, as `store.update` retries. */
+  /** Store `f(event)` for a stored event and return it. `store.update` can retry, so `f` can run more than once. */
   function updateEvent(id: string, f: (event: Event) => Event): Promise<Event> {
     return store.update<Event>(eventKey(id), (event) => {
       if (!event) throw new EventNotFound(id);
@@ -99,7 +99,7 @@ export function createEvents({ store, upsertContact, log }: Dependencies) {
         ...(firstName !== undefined && { firstName }),
         ...(lastName !== undefined && { lastName }),
       };
-      // The registration stands even when the CRM is down or not bound.
+      // The registration succeeds even when the CRM call fails or no CRM is bound.
       let crmContactId: string | null = null;
       try {
         crmContactId = (await upsertContact(person)).contactId;
@@ -107,7 +107,7 @@ export function createEvents({ store, upsertContact, log }: Dependencies) {
         await log.warn("CRM sync failed", { email: key, error: error instanceof Error ? error.message : String(error) });
       }
 
-      // Seats are counted on the event as stored now, which may have changed during the CRM call.
+      // Count seats on the event as stored now, because it can change during the CRM call.
       const saved = await updateEvent(eventId, (current) =>
         current.attendees.some((a) => a.email === key)
           ? current

@@ -103,7 +103,7 @@ describe("register", () => {
     expect(crmCalls).toEqual([{ email: "ada@acme.com", firstName: "Ada" }]);
   });
 
-  it("counts seats after the CRM call, so two people at the same moment get the last seat once", async () => {
+  it("counts seats after the CRM call, so two concurrent registrations do not both get the last seat", async () => {
     const { events } = setup();
     const { eventId } = await events.createEvent({ name: "Totem launch", capacity: 1 });
 
