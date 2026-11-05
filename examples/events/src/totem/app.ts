@@ -4,13 +4,14 @@ import { EventNotFound, createEvents } from "../events/events.js";
 import { manifest } from "./manifest.js";
 
 // One install serves one tenant, and the tenant runs many events through it. Each action runs the
-// Events module on the install's state, its CRM port and its log.
+// Events module on the install's state, its CRM port, and its log.
 
-/** `eventInfo`, `register` and friends answer this for an event ID the install does not have. */
+/** The `AppError` code from `eventInfo`, `register`, `checkIn`, and `listAttendees` for an event ID the install does not have. */
 export const EVENT_NOT_FOUND = 2001;
 
 type Events = ReturnType<typeof createEvents<RpcError>>;
 
+/** Runs `operation` on the install's Events module and turns `EventNotFound` into an `AppError`. */
 const withEvents = <A>(ctx: Totem.Context<typeof manifest>, operation: (events: Events) => Effect.Effect<A, EventNotFound | RpcError>) =>
   operation(createEvents({ store: ctx.state, upsertContact: ctx.ports.upsertContact, log: ctx.log })).pipe(
     Effect.mapError((error) => (error instanceof EventNotFound ? new AppError(EVENT_NOT_FOUND, error.message) : error)),

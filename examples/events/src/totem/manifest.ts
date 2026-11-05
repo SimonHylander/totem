@@ -28,7 +28,7 @@ const ByEvent = Schema.Struct(eventId);
 export const manifest = Totem.Manifest({
   name: "events",
   version: "0.3.0",
-  description: "Runs a tenant's events: registrations up to capacity, a waitlist and check-in. Syncs attendees to a CRM.",
+  description: "Runs a tenant's events: registrations up to capacity, a waitlist, and check-in. Syncs attendees to a CRM.",
   provides: {
     actions: {
       createEvent: {
@@ -37,12 +37,12 @@ export const manifest = Totem.Manifest({
         output: Schema.Struct(eventId),
       },
       listEvents: {
-        description: "Every event of this install, oldest first.",
+        description: "List every event of this install, oldest first.",
         input: Totem.Empty,
         output: Schema.Struct({ events: Schema.Array(EventSummary) }),
       },
       eventInfo: {
-        description: "One event's name, capacity and seats left.",
+        description: "Get one event's name, capacity, and seats left.",
         input: ByEvent,
         output: EventSummary,
       },
@@ -51,19 +51,19 @@ export const manifest = Totem.Manifest({
         input: Schema.Struct({ ...eventId, ...person }),
         output: Schema.Struct({
           status: Schema.Literals(["registered", "waitlisted"]),
-          /** 1-based place among the registered, or on the waitlist. */
+          /** 1-based position among registered attendees, or on the waitlist. */
           position: Schema.Int,
           /** Null when the CRM sync failed or no CRM is bound. */
           crmContactId: Schema.NullOr(Schema.String),
         }),
       },
       checkIn: {
-        description: "Check in a registered attendee. False for waitlisted or unknown emails.",
+        description: "Check in a registered attendee. Returns false for a waitlisted or unknown email.",
         input: Schema.Struct({ ...eventId, email: Schema.String }),
         output: Schema.Struct({ checkedIn: Schema.Boolean }),
       },
       listAttendees: {
-        description: "An event's registered attendees and waitlist, each in registration order.",
+        description: "List an event's registered attendees and waitlist, each in registration order.",
         input: ByEvent,
         output: Schema.Struct({ registered: Schema.Array(Attendee), waitlist: Schema.Array(Attendee) }),
       },

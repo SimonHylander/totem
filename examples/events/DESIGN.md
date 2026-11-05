@@ -104,138 +104,138 @@ components:
 
 **Creative North Star: "The Sign-up Sheet"**
 
-Capacity is drawn as a numbered sheet. Every seat is a line with its number in a fixed column, taken lines say so, long runs collapse into one range line, and a heavy ink rule marks where capacity ends and the waitlist begins. The attendee sees exactly which line is theirs before they act, watches it preview what they type in the form below, and sees their name written onto that same line on submit. The number never moves.
+The registration page draws capacity as a numbered sheet. Every seat is a line with its number in a fixed column. Taken lines say "taken", long runs collapse into one range line, and a heavy ink rule marks where capacity ends and the waitlist begins. Before submitting, the attendee sees which line is theirs, and that line previews what they type in the form below. On submit, their name appears on the same line, and a seat's number does not change.
 
-The world is neutral on purpose. A tenant themes the whole app by overriding one token, the accent, and everything else stays white ground, a zinc ink scale and hairline rules. Density is calm: one reading-width column on every viewport, 48px lines, no decoration. The visual vocabulary is rules, numbers and weight. Depth, imagery and color fields are absent.
+The design is neutral so that a tenant can theme the whole app by overriding one token, the accent. Everything else stays a white ground, a zinc ink scale, and hairline rules. Every viewport gets one reading-width column with 48px lines and no decoration. Rules, numbers, and font weight create all the structure, with no depth, imagery, or color fields.
 
-The system covers the event list (`/`), the registration page (`/events/$eventId`) and the integrations page (`/integrations`).
+The system covers the event list (`/`), the registration page (`/events/$eventId`), and the integrations page (`/integrations`).
 
 **Key Characteristics:**
-- One themeable accent, reserved for the attendee's own line, its number and the submit button.
-- Hairline rows, one strong ink rule for boundaries.
-- System sans throughout with tabular numerals in a fixed number column.
-- Flat white ground. Shadows appear only as focus rings.
-- One 34rem column on phone and desktop alike.
+- One themeable accent, reserved for the attendee's own line, its number, and the submit button.
+- Hairline rows, with one strong ink rule for boundaries.
+- Figtree throughout, with tabular numerals in a fixed number column.
+- A flat white ground. Shadows appear only as focus rings.
+- One 34rem column on phone and desktop.
 
 ## Colors
 
 A neutral zinc scale on white, with a single tenant accent that marks only what belongs to the attendee.
 
 ### Primary
-- **Tenant Accent** (`--accent`): the attendee's own line (its 2px bottom rule and its number), the submit button, and browser surfaces: focus outline, text caret, field focus border and ring, and selection. The shipped default is a clear mid blue. Tenants override it.
+- **Tenant Accent** (`--accent`): the attendee's own line (its 2px bottom rule and its number), the submit button, and these browser elements: focus outline, text caret, field focus border and ring, and selection. The default is a mid blue. Tenants override it.
 - **Accent Ink** (`--accent-ink`): text on the accent, used only on the submit button.
-- **Accent Wash** (`--accent-wash`): the fill behind the attendee's own line. Defined as `color-mix(in oklab, var(--accent) 7%, #ffffff)`, so it follows the tenant accent. The hex in the frontmatter is the default-theme result.
+- **Accent Wash** (`--accent-wash`): the fill behind the attendee's own line, defined as `color-mix(in oklab, var(--accent) 7%, #ffffff)`, so it follows the tenant accent. The hex in the frontmatter is the result for the default accent.
 
 ### Neutral
 - **Ground** (`--ground`): page and field background.
-- **Ink** (`--ink`): headlines, event names, bold counts, attendee names, input text.
-- **Ink 2** (`--ink-2`): ledes, notices, the capacity rule label, sub-lines, placeholders, the top bar's Integrations link at rest.
-- **Ink 3** (`--ink-3`): line numbers, "taken" states, range lines, the sync line, the "optional" hint, field hover border.
+- **Ink** (`--ink`): headlines, event names, bold counts, attendee names, and input text.
+- **Ink 2** (`--ink-2`): ledes, notices, the capacity rule label, sub-lines, the line preview, port labels, app descriptions, event-list counts, and the top bar's Integrations link at rest.
+- **Ink 3** (`--ink-3`): line numbers, "taken" states, range lines, the sync line, the "optional" hint, the integrations caption, the switch when off, and the field hover border.
 - **Line** (`--line`): hairline separators between rows and under the top bar.
-- **Line Strong** (`--line-strong`): the head rule of the event list (1px) and the capacity rule (2px). Same value as Ink.
-- **Taken Grey** (`--taken`): link underline at rest and the field stroke.
+- **Line Strong** (`--line-strong`): the head rule of the event list and of each port (1px), and the capacity rule (2px). It has the same value as Ink.
+- **Taken Grey** (`--taken`): the link underline at rest and the field stroke.
 - **Danger** (`--danger`): the error line when a registration or an integration change fails.
 
-### Named Rules
-**The Own Line Rule.** The accent marks what belongs to the attendee: their line, its number, the button that claims it, and the browser surfaces they are acting through (focus, caret, selection). Links, hover states, counts, status lines and headings never take the accent.
+### Named rules
+**The Own Line Rule.** The accent marks what belongs to the attendee: their line, its number, the button that claims it, and the browser focus, caret, and selection. Links, hover states, counts, status lines, and headings never use the accent.
 
-**The One Token Rule.** A tenant themes the app by overriding `--accent` alone. Every accent tint (wash, selection, focus rings, button hover) is a `color-mix` of `--accent`, never a separate literal.
+**The One Token Rule.** A tenant themes the app by overriding `--accent` alone. Every accent tint (wash, selection, focus rings, and button hover) is a `color-mix` of `--accent`, never a separate literal.
 
 ## Typography
 
-> **Shared tokens:** See [`/DESIGN.md`](/DESIGN.md) for the Figtree typeface, weight scale, OpenType features, and licensing rules. This section documents app-specific usage.
+> **Shared tokens:** See [`/DESIGN.md`](/DESIGN.md) for the Figtree typeface, weight scale, OpenType features, and licensing rules. This section covers how this app uses them.
 
-**Typeface:** Figtree Variable, self-hosted via `@fontsource-variable/figtree` (latin + latin-ext subsets).
+**Typeface:** Figtree Variable, self-hosted through `@fontsource-variable/figtree` (latin and latin-ext subsets).
 **Fallback stack:** `"Figtree Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`
 
-**Character:** One friendly geometric sans that stays neutral enough for tenant accents to be the only brand signal. Hierarchy comes from weight and ink step more than size.
+**Character:** A geometric sans that stays neutral, so the tenant accent is the only brand signal. Hierarchy comes from weight and ink step more than from size.
 
 ### Hierarchy
 - **Headline** (650, clamp 1.75rem to 2.25rem, 1.1, -0.02em, balanced wrap): the page title, one per page.
-- **Title** (600, 1.0625rem): event names in the list and the result line after registering.
-- **Body** (400, 1rem, 1.5): ledes, notices, field input text, the line preview, the attendee's own number (700).
-- **Label** (500, 0.875rem): field labels. The same size at 400 in Ink 3 carries line numbers, "taken", range lines and the sync line.
-- **Caption** (400, 0.8125rem): the capacity rule label and the sub-line under a signed name.
+- **Title** (600, 1.0625rem): event names in the list, app names, and the result line after registering.
+- **Body** (400, 1rem, 1.5): ledes, notices, field input text, the line preview, and the attendee's own number (700).
+- **Label** (500, 0.875rem): field labels. The same size at 400 in Ink 3 sets line numbers, "taken", range lines, and the sync line.
+- **Caption** (400, 0.8125rem): the capacity rule label, the sub-line under a signed name, and the integrations caption.
 
-### Named Rules
-**The Tabular Rule.** Numerals are tabular everywhere (`font-variant-numeric: tabular-nums` on the body). Numbers sit in a fixed column: the 3.25rem number column on the sheet, a right-aligned 7.5rem minimum column on the event list.
+### Named rules
+**The Tabular Rule.** Numerals are tabular everywhere (`font-variant-numeric: tabular-nums` on the body). Numbers sit in a fixed column: the 3.25rem number column on the sheet, and a right-aligned column with a 7.5rem minimum on the event list.
 
 **The Weight Not Color Rule.** Inside a neutral line, emphasis is weight 600 to 700 in Ink against 400 in Ink 2 or Ink 3 ("**20** of 20 open"). Color stays reserved for the accent.
 
 ## Layout
 
-One column, `--measure` (34rem) wide, centered, with `--gutter` (20px) side padding, on every viewport. The top bar is 52px tall with a hairline under it and shares the same column. `main` has 32px top and 64px bottom padding. Vertical rhythm between blocks steps 8px (lede), 24px (sheet, notice, names, result), 28px (event list). The sheet uses a two-column grid: the number column (`--num`, 3.25rem) and the line content. The capacity rule aligns its label to the content column. The optional-name fields sit two-up with a 12px gap and stack to one column at 360px and below.
+Every viewport gets one centered column, `--measure` (34rem) wide, with `--gutter` (20px) side padding. The top bar is 52px tall with a hairline under it and uses the same column. `main` has 32px top padding and 64px bottom padding. The space above a block is 8px for the lede, 16px for the name fields, 24px for the sheet, notice, email field, and result, and 28px for the event list. The sheet is a two-column grid of the number column (`--num`, 3.25rem) and the line content. The capacity rule aligns its label to the content column. The optional name fields sit side by side with a 12px gap and stack into one column at 360px and below.
 
 **The One Column Rule.** Phone and desktop render the same reading-width column. Wider viewports add margin, not columns.
 
 ## Elevation & Depth
 
-The system is flat. There are no shadows, cards or layered surfaces. Structure comes from rules: 1px hairlines between rows, a strong ink rule for a boundary, a 2px accent rule under the attendee's own line. `box-shadow` appears only as a focus treatment.
+The system is flat, with no shadows, cards, or layers. Rules create the structure: 1px hairlines between rows, a strong ink rule for a boundary, and a 2px accent rule under the attendee's own line. `box-shadow` appears only on focused fields.
 
-### Shadow Vocabulary
+### Shadow vocabulary
 - **Field focus ring** (`box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent)`): on a focused field, together with an accent border.
 
-### Named Rules
-**The Ruled Sheet Rule.** Depth is never used to group or lift content. Hairlines separate, strong ink marks a boundary, and the accent rule marks ownership.
+### Named rules
+**The Ruled Sheet Rule.** Never use depth to group or lift content. Hairlines separate, strong ink marks a boundary, and the accent rule marks ownership.
 
 ## Shapes
 
-Lines and rules are square and run the full column width. The only rounded corners are on boxed controls, the name fields and the buttons, at a gentle 8px (`--radius`), and on the integrations switch, a 13px pill. The attendee's own line is a full-width wash band, not a box.
+Lines and rules are square and run the full column width. Only boxed controls have rounded corners: the form fields and buttons at 8px (`--radius`), and the integrations switch, a 13px pill. The attendee's own line is a full-width wash band, not a box.
 
 ## Components
 
 ### Buttons
-Full-width and direct. The one primary action on a page.
-- **Shape:** gently rounded (8px), full column width, 50px tall, no border.
-- **Primary:** Tenant Accent fill, Accent Ink label at weight 600. The label names the outcome with the number ("Take seat 1", "Join the waitlist").
-- **Hover / Focus:** hover darkens to `color-mix(in oklab, var(--accent) 88%, #000000)` over 160ms with the ease-out curve. Focus uses the global 2px accent outline at 2px offset.
-- **Pending:** keeps the accent fill, shows a progress cursor and "Signing you up…".
-- **Ink:** the admin's button on `/integrations`, sized to its label. 40px tall, Ink fill, Ground label at weight 600, 8px radius. The accent stays with the attendee.
+The full-width submit button is the one primary action on a page.
+- **Shape:** 8px radius, full column width, 50px tall, and no border.
+- **Primary:** Tenant Accent fill, with an Accent Ink label at weight 600. The label names the outcome and, for a seat, its number ("Take seat 1", "Join the waitlist").
+- **Hover and focus:** Hover darkens the fill to `color-mix(in oklab, var(--accent) 88%, #000000)` over 160ms with the ease-out curve. Focus uses the global 2px accent outline at a 2px offset.
+- **Pending:** The button keeps the accent fill, shows a progress cursor, and reads "Signing you up…".
+- **Ink:** The Connect button on `/integrations`, sized to its label. It is 40px tall, with an Ink fill, a Ground label at weight 600, and an 8px radius. It uses Ink because the accent belongs to the attendee.
 
-### Inputs / Fields
-- **Order:** Email first at full column width with no hint, since it is the one required field. First and last name follow two-up with the "optional" hint.
-- **Style:** label above (0.875rem, 500), an Ink 3 "optional" hint on optional fields, 44px field, 1px Taken Grey stroke, 8px radius, white fill, 12px side padding.
-- **Hover:** stroke moves to Ink 3.
-- **Focus:** accent border plus the 3px field focus ring, no outline.
-- **Error:** a single Danger line below the button (0.9375rem). Fields do not change color.
-- Taken Grey on white is about 1.5:1, below the 3:1 non-text contrast target. The stroke is recorded as shipped and is not a value to copy into new controls.
+### Inputs and fields
+- **Order:** Email comes first at full column width with no hint, because it is the one required field. First name and last name follow side by side with the "optional" hint.
+- **Style:** The label sits above the field (0.875rem, 500), with an Ink 3 "optional" hint on optional fields. The field is 44px tall, with a 1px Taken Grey stroke, an 8px radius, a white fill, and 12px side padding.
+- **Hover:** The stroke changes to Ink 3.
+- **Focus:** An accent border plus the 3px field focus ring, with no outline.
+- **Error:** One Danger line below the button (0.9375rem). Fields do not change color.
+- **Contrast:** Taken Grey on white is about 1.5:1, below the 3:1 non-text contrast target. This file records the stroke as shipped. Do not copy the value into new controls.
 
 ### Navigation
-- **Top bar:** the app name ("Events") on the list, "All events" elsewhere, weight 600, no underline, 0.9375rem, in the content column above a hairline. "Integrations" sits at the right end on every page, in Ink 2 with no underline. Hover moves it to Ink, and on its own page it is Ink at weight 600.
-- **Links:** inherit text color with a 1px Taken Grey underline offset 0.2em. Hover turns the underline to the text color.
+- **Top bar:** The app name ("Events") on the list and "All events" elsewhere, at weight 600 and 0.9375rem with no underline, in the content column above a hairline. "Integrations" sits at the right end on every page, in Ink 2 with no underline. Hover changes it to Ink. On its own page it is Ink at weight 600.
+- **Links:** Links inherit the text color and have a 1px Taken Grey underline, offset 0.2em. Hover changes the underline to the text color.
 
-### Event List
-- A strong 1px ink head rule, then one row per event with a hairline below. Each row is a whole-row link, 64px minimum, 18px vertical padding.
-- Event name in Title on the left. Count on the right in a fixed tabular column: the open number in Ink at 600, the rest in Ink 2 ("**20** of 20 open", "**Full** · waitlist open").
+### Event list
+- A strong 1px ink head rule, then one row per event with a hairline below. Each row is a whole-row link, 64px minimum, with 18px vertical padding.
+- The event name is in Title on the left. The count is on the right in a fixed tabular column, with the open number in Ink at 600 and the rest in Ink 2 ("**20** of 20 open", "**Full** · waitlist open").
 - Hover underlines the event name in Taken Grey.
 
 ### Integrations
-- **Port label:** the port's description at 0.875rem in Ink 2 above a strong 1px ink rule, then one row per app with a hairline below.
-- **App row:** app name in Title and its description at 0.875rem in Ink 2 on the left, the switch on the right. The status line sits under the description once the app is on: "**Connected**", "**Needs an API key** from an admin." or "**Not connected.**" with the consequence and an ink Connect button. Emphasis follows the Weight Not Color Rule.
-- **Switch:** 44 by 26px with a 44px touch target. Ink 3 when off, Ink when on, with a white 20px knob. It moves when pressed over 160ms and moves back if the change fails. Turning it off needs no confirmation, because the platform keeps the provider install and its credential.
-- **Two apps:** a port holds one app, so turning one on turns the other off. A caption under the list says so when a port has more than one app.
+- **Port label:** The port's description at 0.875rem in Ink 2, above a strong 1px ink rule, then one row per app with a hairline below.
+- **App row:** The app name in Title and its description at 0.875rem in Ink 2 on the left, and the switch on the right. Once the app is on, a status line sits under the description: "**Connected**", "**Needs an API key** from an admin.", or "**Not connected.**" with the consequence and an ink Connect button. Emphasis follows the Weight Not Color Rule.
+- **Switch:** 44 by 26px with a 44px touch target. It is Ink 3 when off and Ink when on, with a white 20px knob. When pressed, it moves over 160ms, and it moves back if the change fails. Turning it off needs no confirmation, because the platform keeps the provider install and its credential.
+- **More than one app:** A port holds one app, so turning one on turns off the current one. A caption under the list says so when a port has more than one app.
 
-### Sign-up Sheet (signature component)
-- **Line:** 48px, number column plus content, hairline below. Taken lines show the number and "taken" in Ink 3 at 0.875rem. Open lines show only the number (with a visually hidden "open").
-- **Range line:** 36px minimum, collapses a run of lines into one entry ("4–20 open", "W1–W5 taken") in the content column. Waitlist numbers carry a "W" prefix.
-- **Capacity rule:** a 2px Line Strong rule with a caption label ("Capacity 20. The waitlist starts here.") in the content column. Lines below it are the waitlist.
-- **Your line:** Accent Wash band with a 2px accent bottom rule. The number is accent, 1rem, 700 ("Next" when the waitlist position is unknown). Before submit it previews the form: "Your seat" ("Your place" on the waitlist) in Ink 2 at 0.875rem until the attendee types, then their name, or their email when no name is given, in Ink 2 at 1rem. The preview is one line, truncated with an ellipsis, and hidden from screen readers. After submit the attendee's name is written onto the same line in 600 with a caption sub-line ("Your seat").
-- **Write motion:** the name reveals left to right with `clip-path` over 520ms on `cubic-bezier(0.16, 1, 0.3, 1)`. Reduced motion removes it.
+### Sign-up sheet (signature component)
+- **Line:** 48px tall, with the number column, the content, and a hairline below. Taken lines show the number and "taken" in Ink 3 at 0.875rem. Open lines show only the number, with a visually hidden "open".
+- **Range line:** 36px minimum. It collapses a run of lines into one entry in the content column ("4–20 open", "W1–W5 taken"). Waitlist numbers have a "W" prefix.
+- **Capacity rule:** A 2px Line Strong rule with a caption label in the content column ("Capacity 20. The waitlist starts here."). Lines below it are the waitlist.
+- **Your line:** An Accent Wash band with a 2px accent bottom rule. The number is accent, 1rem, and 700 ("Next" when the waitlist position is unknown). Before the attendee types, the line shows "Your seat" ("Your place" on the waitlist) in Ink 2 at 0.875rem. As they type, it shows their name in Ink 2 at 1rem, or their email when they give no name. This preview stays on one line, truncates with an ellipsis, and is hidden from screen readers. After submit, the line shows the name or email at weight 600, with a caption sub-line ("Your seat" or "Your place on the waitlist").
+- **Write motion:** The name appears left to right through `clip-path` over 520ms on `cubic-bezier(0.16, 1, 0.3, 1)`. Reduced motion removes the animation.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** theme a tenant by overriding `--accent` only, and derive every accent tint with `color-mix` from it.
-- **Do** keep the accent on the attendee's own line, its number, the submit button and browser focus, caret and selection surfaces.
+- **Do** theme a tenant by overriding `--accent` only, and derive every accent tint from it with `color-mix`.
+- **Do** keep the accent on the attendee's own line, its number, the submit button, and browser focus, caret, and selection.
 - **Do** put numbers in a fixed tabular column (3.25rem on the sheet, right-aligned 7.5rem on lists).
 - **Do** separate rows with 1px `--line` hairlines and mark a real boundary with `--line-strong`.
 - **Do** keep every page in the single 34rem column with 20px gutters.
 - **Do** honor `prefers-reduced-motion` by removing the write reveal and the button and switch transitions.
 
 ### Don't:
-- **Don't** use the accent for links, hover states, counts, headings or status text.
-- **Don't** add cover images, avatars or social proof.
-- **Don't** add paper texture or handwriting costume to the sheet. It is drawn with rules and numbers only.
+- **Don't** use the accent for links, hover states, counts, headings, or status text.
+- **Don't** add cover images, avatars, or social proof.
+- **Don't** add paper texture or handwriting fonts to the sheet. Draw it with rules and numbers only.
 - **Don't** put an event in a centered card with a muted seats line and a black button.
 - **Don't** add shadows or cards for grouping. Box shadows are for focus only.
 - **Don't** use Danger for anything except a failed registration or integration change.

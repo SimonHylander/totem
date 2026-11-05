@@ -1,5 +1,5 @@
-/* The events app's one stylesheet. Neutral by design: a tenant themes the app by overriding
-   --accent, which marks only the attendee's own line, its number and the primary button. */
+/* The events app's one stylesheet. A tenant themes the app by overriding --accent, which marks the
+   attendee's own line, its number, the submit button, and browser focus, caret, and selection. */
 
 :root {
   --accent: #2f5bd3;
@@ -67,7 +67,7 @@ a:hover {
   text-decoration-color: currentColor;
 }
 
-/* Margins are reset per class, not globally. */
+/* Reset margins per class, not globally. */
 .title,
 .lede,
 .notice,
@@ -385,7 +385,7 @@ main {
   color: var(--ink-2);
 }
 
-/* The signature moment: the attendee's name is written onto their line. */
+/* The attendee's name appears on their line, left to right, after they register. */
 @keyframes write {
   from {
     clip-path: inset(0 100% 0 0);
