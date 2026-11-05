@@ -5,14 +5,14 @@
 source "$(dirname "$0")/_common.sh"
 current_run > /dev/null
 
-if page /integrations | grep -q ' · hubspot connected'; then
+if page /integrations | grep -q '>Connected<'; then
   echo "hubspot already connected"
   exit 0
 fi
 
-echo "Waiting for the user to open $EVENTS/integrations, press \"Connect hubspot\", and approve in HubSpot."
+echo "Waiting for the user to open $EVENTS/integrations, press \"Connect\", and approve in HubSpot."
 for _ in $(seq 1 200); do
-  if page /integrations | grep -q ' · hubspot connected'; then
+  if page /integrations | grep -q '>Connected<'; then
     echo "hubspot connected"
     exit 0
   fi

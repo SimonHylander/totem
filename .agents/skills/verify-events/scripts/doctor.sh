@@ -21,7 +21,7 @@ check "events UI :3003 is our vite child" "[[ \$(ps -o ppid= -p \$(listener 3003
 check "events page renders" "page / | grep -q '<h1>Events</h1>'"
 check "tenant admin token works" "action $EVENTS_INSTALL listEvents '{}' | jq -e '.output.events | length > 0'"
 
-if page /integrations | grep -q ' · hubspot connected'; then
+if page /integrations | grep -q '>Connected<'; then
   echo "ok    hubspot connected"
 else
   echo "info  hubspot NOT connected: run connect.sh before proving the HubSpot sync"

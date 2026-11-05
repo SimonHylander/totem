@@ -41,7 +41,7 @@ Run it after launch and whenever anything looks off. Every line must read `ok` b
 
 HubSpot consent needs the user's HubSpot login, so ask the user to do this step:
 
-> Open http://localhost:3003/integrations, press **Connect hubspot**, and approve in HubSpot.
+> Open http://localhost:3003/integrations, press **Connect**, and approve in HubSpot.
 
 Then wait for it:
 
@@ -49,7 +49,7 @@ Then wait for it:
 scripts/connect.sh
 ```
 
-It exits 0 once the page shows ` · hubspot connected`. Without a connection, registrations still succeed but every CRM sync fails. That is a valid run only when the negative path is what you are verifying.
+It exits 0 once the page shows `Connected`. Without a connection, registrations still succeed but every CRM sync fails. That is a valid run only when the negative path is what you are verifying.
 
 ## 4. Drive
 

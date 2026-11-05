@@ -79,7 +79,7 @@ Tenant acme has one events install, bound to its HubSpot install, with two event
 1. HubSpot must list this redirect URL (examples/hubspot/totem-test, pnpm hs:upload):
    ${redirectUri}
 
-2. Connect HubSpot for tenant acme. Press "Connect hubspot" on the integrations page, which also
+2. Connect HubSpot for tenant acme. Press "Connect" on the integrations page, where a switch also
    enables and disables HubSpot:
    ${EVENTS}/integrations
    Or sign in on the platform with the tenant admin token, then press Connect:
