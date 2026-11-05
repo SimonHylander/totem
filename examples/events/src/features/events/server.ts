@@ -1,4 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { eventsInstall, totem } from "../../totem/connection.js";
+import { connectOnce, eventsInstall } from "../../totem/connection.js";
 
-export const listEvents = createServerFn({ method: "GET" }).handler(() => totem().client.start(eventsInstall(), "listEvents", {}));
+export const listEvents = createServerFn({ method: "GET" }).handler(() => connectOnce().client.start(eventsInstall(), "listEvents", {}));

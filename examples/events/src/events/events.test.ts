@@ -8,7 +8,6 @@ function memoryStore() {
   const values = new Map<string, unknown>();
   return {
     get: <T>(key: string) => Effect.sync(() => (values.get(key) ?? null) as T | null),
-    set: (key: string, value: unknown) => Effect.sync(() => void values.set(key, value)),
     update: <T>(key: string, f: (current: T | null) => T) =>
       Effect.sync(() => {
         const next = f((values.get(key) ?? null) as T | null);
