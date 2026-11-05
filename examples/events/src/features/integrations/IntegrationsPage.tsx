@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, getRouteApi, useRouter } from "@tanstack/react-router";
-import { connect, disable, enable, type Port } from "./server.js";
+import type { Port } from "./ports.js";
+import { connect, disable, enable } from "./server.js";
 
 // There is no login yet, so anyone who can reach this page can change the tenant's integrations (ADR 0015).
 
