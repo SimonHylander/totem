@@ -129,7 +129,7 @@ A neutral zinc scale on white, with a single tenant accent that marks only what 
 ### Neutral
 - **Ground** (`--ground`): page and field background.
 - **Ink** (`--ink`): headlines, event names, bold counts, attendee names, input text.
-- **Ink 2** (`--ink-2`): ledes, notices, the capacity rule label, sub-lines, placeholders, the admin link line.
+- **Ink 2** (`--ink-2`): ledes, notices, the capacity rule label, sub-lines, placeholders, the top bar's Integrations link at rest.
 - **Ink 3** (`--ink-3`): line numbers, "taken" states, range lines, the sync line, the "optional" hint, field hover border.
 - **Line** (`--line`): hairline separators between rows and under the top bar.
 - **Line Strong** (`--line-strong`): the head rule of the event list (1px) and the capacity rule (2px). Same value as Ink.
@@ -164,7 +164,7 @@ A neutral zinc scale on white, with a single tenant accent that marks only what 
 
 ## Layout
 
-One column, `--measure` (34rem) wide, centered, with `--gutter` (20px) side padding, on every viewport. The top bar is 52px tall with a hairline under it and shares the same column. `main` has 32px top and 64px bottom padding. Vertical rhythm between blocks steps 8px (lede), 24px (sheet, notice, names, result), 28px (event list), 32px (admin link). The sheet uses a two-column grid: the number column (`--num`, 3.25rem) and the line content. The capacity rule aligns its label to the content column. The optional-name fields sit two-up with a 12px gap and stack to one column at 360px and below.
+One column, `--measure` (34rem) wide, centered, with `--gutter` (20px) side padding, on every viewport. The top bar is 52px tall with a hairline under it and shares the same column. `main` has 32px top and 64px bottom padding. Vertical rhythm between blocks steps 8px (lede), 24px (sheet, notice, names, result), 28px (event list). The sheet uses a two-column grid: the number column (`--num`, 3.25rem) and the line content. The capacity rule aligns its label to the content column. The optional-name fields sit two-up with a 12px gap and stack to one column at 360px and below.
 
 **The One Column Rule.** Phone and desktop render the same reading-width column. Wider viewports add margin, not columns.
 
@@ -201,7 +201,7 @@ Full-width and direct. The one primary action on a page.
 - Taken Grey on white is about 1.5:1, below the 3:1 non-text contrast target. The stroke is recorded as shipped and is not a value to copy into new controls.
 
 ### Navigation
-- **Top bar:** the app name ("Events") on the list, "All events" elsewhere, weight 600, no underline, 0.9375rem, in the content column above a hairline.
+- **Top bar:** the app name ("Events") on the list, "All events" elsewhere, weight 600, no underline, 0.9375rem, in the content column above a hairline. "Integrations" sits at the right end on every page, in Ink 2 with no underline. Hover moves it to Ink, and on its own page it is Ink at weight 600.
 - **Links:** inherit text color with a 1px Taken Grey underline offset 0.2em. Hover turns the underline to the text color.
 
 ### Event List

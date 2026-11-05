@@ -31,9 +31,6 @@ export function EventList() {
           ))}
         </ul>
       )}
-      <p className="admin">
-        <Link to="/integrations">Manage integrations</Link>
-      </p>
     </main>
   );
 }
