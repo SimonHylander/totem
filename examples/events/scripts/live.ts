@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createPlatform, listen } from "@totem/platform";
-import { serve } from "@totem/sdk";
+import { serve } from "@totem/sdk/serve";
 import { app as hubspot } from "@totem/example-hubspot";
 
 // Run the platform, the hubspot app, and this events app (TanStack Start dev server) with its

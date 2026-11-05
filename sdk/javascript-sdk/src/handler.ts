@@ -58,19 +58,19 @@ export function createHandler<M extends Manifest>(typedApp: App<M>, options: Han
     },
 
     async install({ context, callbackToken }, parent) {
-      if (!app.handlers.install) throw new RpcError(ErrorCode.MethodNotFound, "install not implemented");
+      if (!app.implementation.install) throw new RpcError(ErrorCode.MethodNotFound, "install not implemented");
       await app.install({ remote: remoteFor(callbackToken, parent), context, observability });
       return {};
     },
 
     async uninstall({ context, callbackToken }, parent) {
-      if (!app.handlers.uninstall) throw new RpcError(ErrorCode.MethodNotFound, "uninstall not implemented");
+      if (!app.implementation.uninstall) throw new RpcError(ErrorCode.MethodNotFound, "uninstall not implemented");
       await app.uninstall({ remote: remoteFor(callbackToken, parent), context, observability });
       return {};
     },
 
     async "actions/invoke"({ action, input, context, callbackToken }, parent) {
-      if (!(action in app.handlers.actions)) {
+      if (!(action in app.implementation.actions)) {
         throw new RpcError(ErrorCode.ActionNotFound, `unknown action "${action}"`);
       }
       const output = await app.invoke(action, input, { remote: remoteFor(callbackToken, parent), context, observability });

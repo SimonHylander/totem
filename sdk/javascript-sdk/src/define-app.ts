@@ -1,4 +1,5 @@
 import { ErrorCode, RpcError, type CallContext, type InstallContext, type LogLevel, type Manifest, type TraceMetadata, type TraceParent } from "@totem/protocol";
+import { Effect } from "effect";
 import { runCall, type Observability } from "./observability.js";
 import type { Platform } from "./platform.js";
 import type { ActionInput, ActionName, ActionOutput, CallCtx, Handlers, InstallCtx, Ports } from "./types.js";
@@ -34,11 +35,20 @@ type Log = (level: LogLevel, message: string, data?: Record<string, unknown>) =>
 
 export type App<M extends Manifest> = {
   manifest: M;
-  handlers: Handlers<M>;
   /** Run an action against any `Platform`. Tests pass a `fakePlatform`. */
   invoke<K extends ActionName<M>>(action: K, input: ActionInput<M, K>, options: InvokeOptions): Promise<ActionOutput<M, K>>;
   install(options: LifecycleOptions): Promise<void>;
   uninstall(options: LifecycleOptions): Promise<void>;
+};
+
+/** An app with Promise handlers, as `defineApp` returns it. */
+export type PlainApp<M extends Manifest> = App<M> & { handlers: Handlers<M> };
+
+/** What an app runs for each call. Every kind of app reduces to this. */
+export type Implementation = {
+  actions: Record<string, (input: unknown, ctx: CallCtx<Manifest>) => Effect.Effect<unknown, unknown>>;
+  install?: (ctx: InstallCtx<Manifest>) => Effect.Effect<void, unknown>;
+  uninstall?: (ctx: InstallCtx<Manifest>) => Effect.Effect<void, unknown>;
 };
 
 /**
@@ -48,11 +58,7 @@ export type App<M extends Manifest> = {
  */
 export type AnyApp = {
   manifest: Manifest;
-  handlers: {
-    actions: Record<string, (input: unknown, ctx: CallCtx<Manifest>) => Promise<unknown>>;
-    install?: (ctx: InstallCtx<Manifest>) => Promise<void>;
-    uninstall?: (ctx: InstallCtx<Manifest>) => Promise<void>;
-  };
+  implementation: Implementation;
   invoke(action: string, input: unknown, options: Omit<InvokeOptions, "platform"> & Source): Promise<unknown>;
   install(options: Omit<LifecycleOptions, "platform"> & Source): Promise<void>;
   uninstall(options: Omit<LifecycleOptions, "platform"> & Source): Promise<void>;
@@ -108,21 +114,15 @@ function callCtx(manifest: Manifest, platform: Platform, log: Log, context: Call
   };
 }
 
-/**
- * Bind handlers to a manifest. Handler signatures are inferred from the
- * manifest literal, so keep `as const satisfies Manifest` on it.
- */
-export function defineApp<const M extends Manifest>(manifest: M, handlers: Handlers<M>): App<M> {
-  const actions = handlers.actions as AnyApp["handlers"]["actions"];
-  const lifecycle = handlers as AnyApp["handlers"];
-
+/** Build the app that `createHandler`, `fakePlatform` and `appClient` run from its implementation. */
+export function createApp<M extends Manifest>(manifest: M, implementation: Implementation): App<M> {
   const app: AnyApp = {
     manifest,
-    handlers: lifecycle,
+    implementation,
 
     async invoke(action, input, options) {
       const { context = {}, observability = {} } = options;
-      const handler = actions[action];
+      const handler = implementation.actions[action];
       if (!handler) throw new Error(`unknown action "${action}"`);
       const full: CallContext = { ...defaultContext, callId: crypto.randomUUID(), ...context };
       const info = { name: `action ${action}`, tenantId: full.tenantId, installId: full.installId, callId: full.callId };
@@ -131,17 +131,17 @@ export function defineApp<const M extends Manifest>(manifest: M, handlers: Handl
     },
 
     async install(options) {
-      await runHook("install", lifecycle.install, options);
+      await runHook("install", implementation.install, options);
     },
 
     async uninstall(options) {
-      await runHook("uninstall", lifecycle.uninstall, options);
+      await runHook("uninstall", implementation.uninstall, options);
     },
   };
 
   async function runHook(
     name: "install" | "uninstall",
-    hook: AnyApp["handlers"]["install"],
+    hook: Implementation["install"],
     options: Omit<LifecycleOptions, "platform"> & Source,
   ) {
     if (!hook) return;
@@ -154,4 +154,26 @@ export function defineApp<const M extends Manifest>(manifest: M, handlers: Handl
   }
 
   return app as unknown as App<M>;
+}
+
+const fromPromise = <A>(run: () => Promise<A>) => Effect.tryPromise({ try: run, catch: (error) => error });
+
+/**
+ * Bind Promise handlers to a manifest. Handler signatures are inferred from the manifest literal, so
+ * keep `as const satisfies Manifest` on it. `Totem.App` is the Effect path (ADR 0019).
+ */
+export function defineApp<const M extends Manifest>(manifest: M, handlers: Handlers<M>): PlainApp<M> {
+  const { actions, install, uninstall } = handlers as unknown as {
+    actions: Record<string, (input: unknown, ctx: CallCtx<Manifest>) => Promise<unknown>>;
+    install?: (ctx: InstallCtx<Manifest>) => Promise<void>;
+    uninstall?: (ctx: InstallCtx<Manifest>) => Promise<void>;
+  };
+  const app = createApp(manifest, {
+    actions: Object.fromEntries(
+      Object.entries(actions).map(([name, handler]) => [name, (input: unknown, ctx: CallCtx<Manifest>) => fromPromise(() => handler(input, ctx))]),
+    ),
+    ...(install && { install: (ctx: InstallCtx<Manifest>) => fromPromise(() => install(ctx)) }),
+    ...(uninstall && { uninstall: (ctx: InstallCtx<Manifest>) => fromPromise(() => uninstall(ctx)) }),
+  });
+  return Object.assign(app, { handlers });
 }

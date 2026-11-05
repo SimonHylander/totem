@@ -2,7 +2,14 @@
 
 One blessed way to solve each recurring problem. Copy the exemplar. Weed ids point into [anti-patterns.md](anti-patterns.md). If an **Exemplar** line names a weed, the file still holds that weed, so leave those lines out when you copy.
 
-The repo has two zones. Packages and the platform are Effect code. The protocol, the SDK and the examples are Promise code, and the SDK's public API is `async` (ADR 0005). An entry applies to both zones unless it names one. Whether the Promise zone stays is fork [Effect scope](#effect-scope-fork).
+The repo has two zones. Packages, the platform and apps are Effect code. The protocol and the SDK's transport are Promise code, behind `Totem.App` (ADR 0019). An entry applies to both zones unless it names one.
+
+## Apps
+
+- **Path:** declare the manifest with `Totem.Manifest` and Effect schemas in its own file, and define the app with `Totem.App({ manifest, layer }, Effect.gen(...))`.
+- **Exemplar:** `examples/hubspot/src/app.ts`
+- **Enforced by:** the types of `Totem.Manifest` and `Totem.App`
+- **Why:** one schema types the handler, validates the call and emits the wire's JSON Schema (ADR 0019).
 
 ## Domain packages
 
@@ -20,7 +27,7 @@ The repo has two zones. Packages and the platform are Effect code. The protocol,
 
 ## Errors
 
-- **Path:** Effect zone: one `Schema.TaggedError` class per failure, in the package's `errors.ts`. Map each new tag in `STATUS` (`platform/src/http.ts`) and `RPC_CODES` (`platform/src/platform-methods.ts`). Promise zone: throw `AppError` from `@totem/sdk` in app code, and `RpcError` from `@totem/protocol` in the SDK.
+- **Path:** Effect zone: one `Schema.TaggedError` class per failure, in the package's `errors.ts`. Map each new tag in `STATUS` (`platform/src/http.ts`) and `RPC_CODES` (`platform/src/platform-methods.ts`). An app handler fails with `AppError` from `@totem/sdk`. The SDK's transport throws `RpcError` from `@totem/protocol`.
 - **Exemplar:** `packages/installs/src/errors.ts`
 - **Enforced by:** the `STATUS` and `RPC_CODES` records are keyed by every `PlatformError` tag, so a missing mapping is a type error. Bare `new Error` is W10, unenforced.
 - **Why:** the wire needs a status and a numeric JSON-RPC code for every failure.
@@ -107,8 +114,3 @@ The repo has two zones. Packages and the platform are Effect code. The protocol,
 
 - **Path:** none yet. All 15 reads are direct `process.env`, in entry points, live scripts and `examples/events/src/totem/connection.ts`. Four entry points repeat a `throw new Error("X is required")` check (W5).
 - **Recommendation:** Effect `Config`, read once per entry point. Candidate exemplar: `examples/events/src/totem/connection.ts` after migration, since it already reads lazily and fails loudly.
-
-## Effect scope (fork)
-
-- **Path:** undecided. `AGENTS.md` says Effect first everywhere. The SDK and examples are Promise code, and the SDK's public API is `async`. The protocol declares `effect` but never imports it.
-- **Decision needed:** either record the Promise zone as an exception in an ADR (`docs/contract.md` rule 5), or move the protocol and SDK internals to Effect behind the `async` API. The answer sets the scope of W6, W7, W10 and W11.

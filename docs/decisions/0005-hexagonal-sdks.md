@@ -1,6 +1,6 @@
 # 0005: SDKs give app authors a hexagonal architecture
 
-Status: Accepted (2026-09-25)
+Status: Accepted (2026-09-25). [0019](0019-effect-first-sdk.md) replaces the TypeScript sketch.
 
 ## Context
 
