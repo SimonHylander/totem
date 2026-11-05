@@ -20,7 +20,7 @@ Preconditions:
 
 - **Created.** Run `email="verify+$(date +%s)@example.com"`, then `node scripts/register.mjs --email "$email"`, then `scripts/confirm.sh "$email"`. Expect `PASS` and a `contact created` line in `live-log.txt`.
 - **Updated.** Register an email that already exists in HubSpot but not in this run, such as one from an earlier run's evidence. Then run `confirm.sh` on it. Expect `PASS` and a `contact updated` line.
-- **Failed.** In a run without a connection, or after pressing `Disable` on the integrations page, register a fresh email and run `confirm.sh`. Expect `FAIL: the CRM sync failed`, `crmContactId: null` in `attendees.json`, and a `CRM sync failed` line with the error in `live-log.txt`. For this path, that FAIL is the expected result.
+- **Failed.** In a run without a connection, or after turning off the `hubspot` switch on the integrations page, register a fresh email and run `confirm.sh`. Expect `FAIL: the CRM sync failed`, `crmContactId: null` in `attendees.json`, and a `CRM sync failed` line with the error in `live-log.txt`. For this path, that FAIL is the expected result.
 - **Proof.** `<run>/evidence/<email>/verdict.txt`, `attendees.json` and `hubspot-contact.json`.
 
 ## Gotchas
