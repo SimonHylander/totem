@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { createPlatform, listen } from "@totem/platform";
-import { defineApp, type Manifest } from "@totem/sdk";
+import { Totem, defineApp, type Manifest } from "@totem/sdk";
 import { serve } from "@totem/sdk/serve";
-import { Context, Layer, Logger, Option, Tracer } from "effect";
-import { app } from "./app.js";
+import { Context, Effect, Layer, Logger, Option, Tracer } from "effect";
+import { app, handlers } from "./app.js";
 
 // The verify-totem run: boot the platform and two apps over real HTTP, drive the management API
 // through every step of an install, and check the result and the trace. Exits non-zero on the first
@@ -33,17 +33,21 @@ const enricher = defineApp(
 
 /** What the contacts app saw on its last createContact: its config, its key and its stored state. */
 const seen: { pipeline?: string | undefined; key?: string; lastContactId?: unknown } = {};
-const contacts = defineApp(app.manifest, {
-  actions: {
-    createContact: async (input, ctx) => {
-      const output = await app.handlers.actions.createContact(input, ctx);
-      seen.pipeline = ctx.config.pipeline;
-      seen.key = (await ctx.credentials.get("crm")).key;
-      seen.lastContactId = await ctx.state.get("lastContactId");
-      return output;
+const contacts = Totem.App(
+  { manifest: app.manifest },
+  Effect.succeed({
+    actions: {
+      createContact: (input, ctx) =>
+        Effect.gen(function* () {
+          const output = yield* handlers.actions.createContact(input, ctx);
+          seen.pipeline = ctx.config.pipeline;
+          seen.key = (yield* ctx.credentials.get("crm")).key;
+          seen.lastContactId = yield* ctx.state.get("lastContactId");
+          return output;
+        }),
     },
-  },
-});
+  }),
+);
 
 const spans: Tracer.Span[] = [];
 const tracer = Tracer.make({
