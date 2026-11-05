@@ -22,7 +22,6 @@ const EventSummary = Schema.Struct({
   seatsLeft: Schema.Int,
 });
 
-/** Input with only an event ID. */
 const ByEvent = Schema.Struct(eventId);
 
 export const manifest = Totem.Manifest({

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { getRouteApi } from "@tanstack/react-router";
-import { registerAttendee, registration } from "./server.js";
+import { parseRegistration, registerAttendee } from "./server.js";
 import { nextSpot, sheetRows, type Spot } from "./sheet.js";
 import { SheetRow, rowKey, type Signed } from "./SheetRow.js";
 
@@ -13,7 +13,6 @@ function lineText({ email, firstName, lastName }: { email?: string; firstName?: 
   return [firstName, lastName].map((part) => part?.trim()).filter(Boolean).join(" ") || (email?.trim() ?? "");
 }
 
-/** The line text for the form's current values. The page shows it on the attendee's line as they type. */
 function draftOf(form: HTMLFormElement): string {
   const data = new FormData(form);
   const value = (name: string) => {
@@ -42,12 +41,12 @@ export function RegistrationPage() {
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = Object.fromEntries(new FormData(e.currentTarget));
-    const data = registration({ ...form, eventId });
+    const data = parseRegistration({ ...form, eventId });
     setPending(true);
     setFailed(false);
     try {
       const result = await registerAttendee({ data });
-      setSigned({ result, name: lineText(data) });
+      setSigned({ result, lineText: lineText(data) });
     } catch {
       setFailed(true);
     } finally {
@@ -113,7 +112,6 @@ export function RegistrationPage() {
   );
 }
 
-// Shown for an unknown event and for a platform that cannot be reached. The server log has the cause.
 export function RegistrationError() {
   return (
     <main>

@@ -1,8 +1,7 @@
 import type { Row, Spot } from "./sheet.js";
 import type { registerAttendee } from "./server.js";
 
-/** The registration result and the text on the attendee's line, once they have registered. */
-export type Signed = { result: Awaited<ReturnType<typeof registerAttendee>>; name: string };
+export type Signed = { result: Awaited<ReturnType<typeof registerAttendee>>; lineText: string };
 
 export function rowKey(row: Row): string {
   switch (row.kind) {
@@ -17,10 +16,6 @@ export function rowKey(row: Row): string {
   }
 }
 
-/**
- * One row of the sheet. The attendee's own row previews `draft` until they register, then shows
- * `signed.name`.
- */
 export function SheetRow({ row, signed, draft }: { row: Row; signed: Signed | null; draft: string }) {
   const prefix = (list: Spot["list"]) => (list === "waitlist" ? "W" : "");
   switch (row.kind) {
@@ -59,7 +54,7 @@ export function SheetRow({ row, signed, draft }: { row: Row; signed: Signed | nu
           </span>
           {signed ? (
             <span>
-              <span className="row-name">{signed.name}</span>
+              <span className="row-name">{signed.lineText}</span>
               <span className="row-sub">{row.list === "seats" ? "Your seat" : "Your place on the waitlist"}</span>
             </span>
           ) : draft ? (
