@@ -23,7 +23,7 @@ export const Route = createRootRoute({
   ),
 });
 
-/** The top bar: the app name on the event list, a way back to it everywhere else. */
+/** The top bar: the app name on the event list, a way back to it everywhere else, and the integrations link. */
 function Bar() {
   const home = useRouterState({ select: (state) => state.location.pathname === "/" });
   return (
@@ -31,6 +31,9 @@ function Bar() {
       <div className="bar-inner">
         <Link to="/" className="bar-home">
           {home ? "Events" : "All events"}
+        </Link>
+        <Link to="/integrations" className="bar-link">
+          Integrations
         </Link>
       </div>
     </header>

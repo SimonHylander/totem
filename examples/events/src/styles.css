@@ -103,10 +103,19 @@ main {
   text-decoration: none;
 }
 
-.admin {
-  margin: 32px 0 0;
-  font-size: 0.875rem;
+.bar-link {
+  padding: 11px 0;
   color: var(--ink-2);
+  text-decoration: none;
+}
+
+.bar-link:hover {
+  color: var(--ink);
+}
+
+.bar-link[aria-current="page"] {
+  font-weight: 600;
+  color: var(--ink);
 }
 
 main {

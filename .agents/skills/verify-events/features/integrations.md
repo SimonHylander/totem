@@ -11,7 +11,7 @@ The integrations page lets a tenant choose which public app provides the CRM con
 
 ## How to get to it (user POV)
 
-- Choose the link `Integrations` on the events list.
+- Choose the link `Integrations` in the top bar on any page.
 - Open `http://localhost:3003/integrations`.
 
 ## Driving it with playwright-core
