@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { getRouteApi } from "@tanstack/react-router";
-import { registerAttendee, registration } from "./server.js";
+import { parseRegistration, registerAttendee } from "./server.js";
 import { nextSpot, sheetRows, type Spot } from "./sheet.js";
 import { SheetRow, rowKey, type Signed } from "./SheetRow.js";
 
@@ -13,7 +13,6 @@ function lineText({ email, firstName, lastName }: { email?: string; firstName?: 
   return [firstName, lastName].map((part) => part?.trim()).filter(Boolean).join(" ") || (email?.trim() ?? "");
 }
 
-/** Mirrors the form into the attendee's line as they type. */
 function draftOf(form: HTMLFormElement): string {
   const data = new FormData(form);
   const value = (name: string) => {
@@ -42,12 +41,12 @@ export function RegistrationPage() {
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = Object.fromEntries(new FormData(e.currentTarget));
-    const data = registration({ ...form, eventId });
+    const data = parseRegistration({ ...form, eventId });
     setPending(true);
     setFailed(false);
     try {
       const result = await registerAttendee({ data });
-      setSigned({ result, name: lineText(data) });
+      setSigned({ result, lineText: lineText(data) });
     } catch {
       setFailed(true);
     } finally {
@@ -113,11 +112,10 @@ export function RegistrationPage() {
   );
 }
 
-// Covers an unknown event and a platform that cannot be reached alike. The server log has the cause.
 export function RegistrationError() {
   return (
     <main>
-      <h1 className="title">Event not found</h1>
+      <h1 className="title">Event not available</h1>
       <p className="notice">This event could not be loaded. Check the link, or reload the page to try again.</p>
     </main>
   );

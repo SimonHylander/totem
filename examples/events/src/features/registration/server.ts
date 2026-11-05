@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { eventsInstall, totem } from "../../totem/connection.js";
+import { connectOnce, eventsInstall } from "../../totem/connection.js";
 
 type Registration = { eventId: string; email: string; firstName?: string; lastName?: string };
 
@@ -9,8 +9,7 @@ function text(value: unknown, field: string): string {
   return value.trim();
 }
 
-/** Checks a registration. The page runs it on submit too, so the attendee's line shows what is sent. */
-export function registration(data: unknown): Registration {
+export function parseRegistration(data: unknown): Registration {
   const { eventId, email, firstName, lastName } = (data ?? {}) as Record<string, unknown>;
   const optional = (value: unknown, field: string) => (value === undefined || value === "" ? undefined : text(value, field));
   const first = optional(firstName, "firstName");
@@ -25,8 +24,8 @@ export function registration(data: unknown): Registration {
 
 export const getEvent = createServerFn({ method: "GET" })
   .validator((eventId: unknown) => text(eventId, "eventId"))
-  .handler(({ data: eventId }) => totem().client.start(eventsInstall(), "eventInfo", { eventId }));
+  .handler(({ data: eventId }) => connectOnce().client.start(eventsInstall(), "eventInfo", { eventId }));
 
 export const registerAttendee = createServerFn({ method: "POST" })
-  .validator(registration)
-  .handler(({ data }) => totem().client.start(eventsInstall(), "register", data));
+  .validator(parseRegistration)
+  .handler(({ data }) => connectOnce().client.start(eventsInstall(), "register", data));

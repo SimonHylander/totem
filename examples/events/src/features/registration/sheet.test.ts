@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { nextSpot, sheetRows, type Row } from "./sheet.js";
 
-/** A compact picture of the rows: `3x` taken line, `4o` open line, `2-13x` range, `@15` you, `|` rule. */
 function draw(rows: Row[]): string {
   return rows
     .map((row) => {
@@ -30,7 +29,7 @@ describe("sheetRows", () => {
     expect(draw(sheetRows(2, 1, nextSpot(2, 1)))).toBe("1x @2 |");
   });
 
-  it("keeps a large event to a handful of rows", () => {
+  it("draws an event of 500 seats in as many rows as an event of 20", () => {
     expect(draw(sheetRows(500, 250, nextSpot(500, 250)))).toBe("1x 2-249x 250x @251 252o 253o 254-500o |");
   });
 

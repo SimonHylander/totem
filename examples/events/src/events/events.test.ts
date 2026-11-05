@@ -8,7 +8,6 @@ function memoryStore() {
   const values = new Map<string, unknown>();
   return {
     get: <T>(key: string) => Effect.sync(() => (values.get(key) ?? null) as T | null),
-    set: (key: string, value: unknown) => Effect.sync(() => void values.set(key, value)),
     update: <T>(key: string, f: (current: T | null) => T) =>
       Effect.sync(() => {
         const next = f((values.get(key) ?? null) as T | null);
@@ -99,7 +98,7 @@ describe("register", () => {
     expect(crmCalls).toEqual([{ email: "ada@acme.com", firstName: "Ada" }]);
   });
 
-  it("counts seats after the CRM call, so two people at the same moment get the last seat once", async () => {
+  it("counts seats after the CRM call, so two concurrent registrations do not both get the last seat", async () => {
     const { events } = setup();
     const { eventId } = await run(events.createEvent({ name: "Totem launch", capacity: 1 }));
 

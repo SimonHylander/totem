@@ -3,10 +3,6 @@ import { Effect } from "effect";
 import { EventNotFound, createEvents } from "../events/events.js";
 import { manifest } from "./manifest.js";
 
-// One install serves one tenant, and the tenant runs many events through it. Each action runs the
-// Events module on the install's state, its CRM port and its log.
-
-/** `eventInfo`, `register` and friends answer this for an event ID the install does not have. */
 export const EVENT_NOT_FOUND = 2001;
 
 type Events = ReturnType<typeof createEvents<RpcError>>;
