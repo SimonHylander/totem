@@ -1,4 +1,4 @@
-import { serve } from "@totem/sdk";
+import { serve } from "@totem/sdk/serve";
 import { app } from "./app.js";
 
 const secret = process.env["TOTEM_APP_SECRET"];

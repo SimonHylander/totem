@@ -1,5 +1,6 @@
 import type { FromSchema, JSONSchema } from "json-schema-to-ts";
 import type { CredentialValueFor, LogLevel, Manifest, Signature } from "@totem/protocol";
+import type { codecs, JsonCodec } from "./manifest.js";
 
 // Everything here is derived from the manifest literal. Authors write the
 // manifest once and get typed handlers, ports, credentials and config.
@@ -21,8 +22,10 @@ export type Credentials<M> = { [K in keyof CredentialNeeds<M> & string]: Credent
 
 type Config<M> = M extends { config: infer C extends JSONSchema } ? FromSchema<C> : Record<string, unknown>;
 
-type InputOf<S> = S extends { input: infer I } ? Infer<I> : never;
-type OutputOf<S> = S extends { output: infer O } ? Infer<O> : never;
+// A `Totem.Manifest` signature carries its Effect schemas, and a caller outside the app sends and
+// receives their encoded form. A plain literal is read through `FromSchema`.
+type InputOf<S> = S extends { readonly [codecs]: { input: infer C extends JsonCodec } } ? C["Encoded"] : S extends { input: infer I } ? Infer<I> : never;
+type OutputOf<S> = S extends { readonly [codecs]: { output: infer C extends JsonCodec } } ? C["Encoded"] : S extends { output: infer O } ? Infer<O> : never;
 
 export type ActionInput<M, K extends keyof ActionDefs<M>> = InputOf<ActionDefs<M>[K]>;
 export type ActionOutput<M, K extends keyof ActionDefs<M>> = OutputOf<ActionDefs<M>[K]>;
@@ -34,7 +37,7 @@ export type Ports<M> = {
   [K in keyof PortDefs<M>]: (input: InputOf<PortDefs<M>[K]>) => Promise<OutputOf<PortDefs<M>[K]>>;
 };
 
-type State = {
+export type State = {
   get<T = unknown>(key: string): Promise<T | null>;
   /** Write unconditionally. Use `update` when the new value depends on the current one. */
   set(key: string, value: unknown): Promise<void>;

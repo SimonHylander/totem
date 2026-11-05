@@ -22,3 +22,4 @@ One file per decision. Status is `Accepted`, `Proposed` or `Superseded`. To chan
 | [0016](0016-trace-metadata.md) | Trace metadata in the signed request, anchored by the callback token | Accepted |
 | [0017](0017-versioned-manifests.md) | Installs pin an immutable manifest version and upgrade explicitly when compatible | Proposed |
 | [0018](0018-conditional-state-writes.md) | State writes can name the version they read. `StateConflict` on a stale write, `state.update` in the JS SDK | Accepted |
+| [0019](0019-effect-first-sdk.md) | The TypeScript SDK is Effect first: `Totem.Manifest` and `Totem.App`, Effect Schema emitting JSON Schema | Accepted |

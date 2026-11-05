@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createPlatform, listen } from "@totem/platform";
-import { defineApp, serve, type Manifest } from "@totem/sdk";
+import { defineApp, type Manifest } from "@totem/sdk";
+import { serve } from "@totem/sdk/serve";
 import { Context, Layer, Logger, Option, Tracer } from "effect";
 import { app } from "./app.js";
 

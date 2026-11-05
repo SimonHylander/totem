@@ -1,6 +1,6 @@
 # 0010: TypeScript infers types from the manifest literal
 
-Status: Accepted (2026-09-26)
+Status: Accepted (2026-09-26). Amended by [0019](0019-effect-first-sdk.md), which makes `Totem.Manifest` the authoring path.
 
 ## Context
 

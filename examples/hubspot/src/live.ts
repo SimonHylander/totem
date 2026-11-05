@@ -1,5 +1,5 @@
 import { createPlatform, listen } from "@totem/platform";
-import { serve } from "@totem/sdk";
+import { serve } from "@totem/sdk/serve";
 import { app } from "./app.js";
 
 // Run the platform and this app against your HubSpot account. `pnpm live` reads .env.local:

@@ -1,10 +1,10 @@
-export { defineApp, type App } from "./define-app.js";
+export * as Totem from "./totem.js";
+export { defineApp, type App, type PlainApp } from "./define-app.js";
 export type { Handlers, CallCtx, InstallCtx, Ports } from "./types.js";
 export type { Platform } from "./platform.js";
 export { fakePlatform, type FakePlatform } from "./fake-platform.js";
 export { createHandler } from "./handler.js";
 export { appClient } from "./app-client.js";
-export { serve } from "./serve.js";
 export type { Observability } from "./observability.js";
 export { AppError } from "./errors.js";
-export type { Manifest } from "@totem/protocol";
+export type { Manifest, RpcError } from "@totem/protocol";

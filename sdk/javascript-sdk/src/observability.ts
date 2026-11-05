@@ -33,7 +33,7 @@ export function runCall<A>(
   parent: TraceParent | undefined,
   observability: Observability,
   connect: (trace: TraceMetadata) => Platform,
-  work: (platform: Platform, log: (level: LogLevel, message: string, data?: Record<string, unknown>) => Promise<void>) => Promise<A>,
+  work: (platform: Platform, log: (level: LogLevel, message: string, data?: Record<string, unknown>) => Promise<void>) => Effect.Effect<A, unknown>,
 ): Promise<A> {
   const run = <B>(effect: Effect.Effect<B, unknown>) =>
     observability.runtime ? observability.runtime.runPromise(effect) : Effect.runPromise(effect);
@@ -71,7 +71,7 @@ export function runCall<A>(
           }
           if (destination !== "local") await platform.call("log", { level, message, data });
         };
-        return Effect.tryPromise({ try: () => work(traced, log), catch: (error) => error });
+        return work(traced, log).pipe(Effect.withParentSpan(span));
       },
     ),
   );
