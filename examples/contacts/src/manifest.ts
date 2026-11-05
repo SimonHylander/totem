@@ -1,32 +1,16 @@
-import type { Manifest } from "@totem/sdk";
+import { Totem } from "@totem/sdk";
+import { Schema } from "effect";
 
-export const manifest = {
+export const manifest = Totem.Manifest({
   name: "contacts",
   version: "0.1.0",
-  protocol: "1",
   description: "Creates contacts in a CRM, enriched through whatever the tenant has installed.",
   provides: {
     actions: {
       createContact: {
         description: "Create a contact from an email address.",
-        input: {
-          type: "object",
-          required: ["email"],
-          properties: {
-            email: { type: "string" },
-            name: { type: "string" },
-          },
-          additionalProperties: false,
-        },
-        output: {
-          type: "object",
-          required: ["contactId", "company"],
-          properties: {
-            contactId: { type: "string" },
-            company: { type: ["string", "null"] },
-          },
-          additionalProperties: false,
-        },
+        input: Schema.Struct({ email: Schema.String, name: Schema.optionalKey(Schema.String) }),
+        output: Schema.Struct({ contactId: Schema.String, company: Schema.NullOr(Schema.String) }),
       },
     },
   },
@@ -38,25 +22,10 @@ export const manifest = {
     actions: {
       enrichPerson: {
         description: "Look up a person by email.",
-        input: {
-          type: "object",
-          required: ["email"],
-          properties: { email: { type: "string" } },
-          additionalProperties: false,
-        },
-        output: {
-          type: "object",
-          properties: { company: { type: "string" } },
-          additionalProperties: false,
-        },
+        input: Schema.Struct({ email: Schema.String }),
+        output: Schema.Struct({ company: Schema.optionalKey(Schema.String) }),
       },
     },
   },
-  config: {
-    type: "object",
-    properties: {
-      pipeline: { type: "string" },
-    },
-    additionalProperties: false,
-  },
-} as const satisfies Manifest;
+  config: Schema.Struct({ pipeline: Schema.optionalKey(Schema.String) }),
+});
