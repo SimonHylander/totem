@@ -58,6 +58,13 @@ module.exports = {
       from: { path: "^examples/([^/]+)/", pathNot: "/live\\.ts$" },
       to: { path: "^examples/", pathNot: "^examples/$1/" },
     },
+    {
+      name: "events-rules-stay-apart-from-totem",
+      comment: "The events app's Events module takes storage, the CRM and logging from its caller. It imports no Totem code or app code.",
+      severity: "error",
+      from: { path: "^examples/events/src/events/" },
+      to: { path: "^(sdk|protocol|platform|packages)/|^@totem/|^examples/events/src/", pathNot: "^examples/events/src/events/" },
+    },
   ],
   options: {
     // Built packages and third-party code are import targets, never cruised themselves.

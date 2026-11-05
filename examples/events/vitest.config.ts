@@ -1,4 +1,4 @@
 import { defineConfig } from "vitest/config";
 
-// Tests cover the Totem app logic only, so they skip the TanStack Start plugin in vite.config.ts.
+// Tests skip the TanStack Start plugin in vite.config.ts, so they never run a server function.
 export default defineConfig({ test: { include: ["src/**/*.test.ts"] } });
