@@ -3,22 +3,14 @@ import { Predicate, Schema } from "effect";
 
 export type { JSONSchema };
 
-// Effect Schemas for the JSON Schemas in this folder, and the types derived from them (ADR 0020).
-// The JSON Schemas stay the contract (ADR 0004). contract.test.ts fails when the two disagree.
-// TypeScript reads manifests at compile time through `as const`, so JSON Schema fields are typed
-// as `JSONSchema` from json-schema-to-ts. Codegen is for Python and Go.
-
 export const PROTOCOL_VERSION = "1";
 
-/** Decode as the JSON Schemas validate: an unknown key fails, as `additionalProperties: false` does. */
 export const parseOptions = { onExcessProperty: "error" } as const;
 
-/** A JSON Schema document. Checked as a boolean or an object only, so authors keep literal types. */
 const JsonSchema = Schema.declare((value): value is JSONSchema => Predicate.isBoolean(value) || Predicate.isObject(value));
 
 const Identifier = Schema.String.check(Schema.isPattern(/^[a-zA-Z][a-zA-Z0-9]*$/));
 
-/** An object with no keys. */
 const Empty = Schema.Record(Schema.String, Schema.Never);
 
 const JsonObject = Schema.Record(Schema.String, Schema.Unknown);
@@ -116,7 +108,6 @@ export type CredentialValueFor<N> = N extends { type: infer T } ? Extract<Creden
 export const LogLevel = Schema.Literals(["debug", "info", "warn", "error"]);
 export type LogLevel = typeof LogLevel.Type;
 
-/** A method table: each method's `params` and `result` schemas. */
 export type MethodSchemas = {
   readonly [method: string]: {
     readonly params: Schema.Codec<unknown, unknown, never, never>;
@@ -124,20 +115,17 @@ export type MethodSchemas = {
   };
 };
 
-/** The TypeScript types of a method table: `{ [method]: { params, result } }`. */
 export type MethodTypes<T extends MethodSchemas> = {
   [K in keyof T]: { params: T[K]["params"]["Type"]; result: T[K]["result"]["Type"] };
 };
 
 const CallbackToken = Schema.String;
 
-/** A state key's version. */
 const StateVersion = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
 /** Methods the platform calls on an app. */
 export const AppMethods = {
   initialize: {
-    /** Any `protocolVersion` decodes, so the app can answer ProtocolVersionUnsupported for a major it does not speak. */
     params: Schema.Struct({ protocolVersion: Schema.String, platformUrl: Schema.String }),
     result: Schema.Struct({ manifest: Manifest }),
   },

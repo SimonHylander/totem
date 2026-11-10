@@ -52,8 +52,7 @@ export const attributesOf = (install: Pick<Install, "tenantId" | "id" | "appId">
 /**
  * Signed JSON-RPC call to an app (ADR 0008) in a client span named `name`. The span goes to the app
  * as the request's trace member, and `params` gets it to mint into the callback token, so the app's
- * callbacks land under this span (ADR 0016). A JSON-RPC error fails with AppFailed, a result that does
- * not match the method's schema fails with SchemaError, and anything else dies.
+ * callbacks land under this span (ADR 0016).
  */
 export function callApp<M extends keyof AppMethods>(
   app: AppRecord,

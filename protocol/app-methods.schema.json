@@ -10,7 +10,7 @@
         "required": ["protocolVersion", "platformUrl"],
         "additionalProperties": false,
         "properties": {
-          "protocolVersion": { "const": "1" },
+          "protocolVersion": { "type": "string" },
           "platformUrl": {
             "type": "string",
             "format": "uri",

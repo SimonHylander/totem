@@ -5,7 +5,7 @@ import {
   PROTOCOL_VERSION,
   RpcError,
   SIGNATURE_HEADER,
-  parseOptions,
+  decodeParams,
   parseTrace,
   verify,
   type JsonRpcId,
@@ -103,10 +103,8 @@ export function createHandler<M extends Manifest>(typedApp: App<M>, options: Han
       return reply(parsed.id, failure(new RpcError(ErrorCode.MethodNotFound, `unknown method "${parsed.method}"`)));
     }
 
-    const params = Schema.decodeUnknownResult(AppMethods[parsed.method].params, parseOptions)(parsed.params);
-    if (params._tag === "Failure") {
-      return reply(parsed.id, failure(new RpcError(ErrorCode.InvalidParams, params.failure.message)));
-    }
+    const params = decodeParams(AppMethods, parsed.method, parsed.params);
+    if (params._tag === "Failure") return reply(parsed.id, failure(params.failure));
 
     try {
       // The signature has verified, so the trace member can be read (ADR 0016).
