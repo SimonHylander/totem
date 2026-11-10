@@ -1,4 +1,4 @@
-import { rpc, type PlatformMethods, type TraceMetadata } from "@totem/protocol";
+import { PlatformMethods, rpc, type TraceMetadata } from "@totem/protocol";
 
 /**
  * The driven port. Everything an app asks of the platform is one of the protocol's
@@ -21,7 +21,7 @@ type ClientOptions = {
 export function platformClient({ url, token, fetch: doFetch, trace }: ClientOptions): Platform {
   return {
     call: (method, params) =>
-      rpc<PlatformMethods, typeof method>(url, method, params, {
+      rpc(url, PlatformMethods, method, params, {
         headers: { authorization: `Bearer ${token}` },
         ...(doFetch && { fetch: doFetch }),
         ...(trace && { trace }),

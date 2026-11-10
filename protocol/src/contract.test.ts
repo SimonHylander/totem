@@ -1,22 +1,26 @@
 import { readFileSync } from "node:fs";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
+import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import type {
+import { TraceMetadata } from "./trace.js";
+import {
   AppMethods,
-  CallContext,
-  InstallContext,
-  LogLevel,
   Manifest,
   PlatformMethods,
   SignedPlatformMethods,
+  parseOptions,
+  type CallContext,
+  type InstallContext,
+  type LogLevel,
 } from "./types.js";
 
-// The JSON Schemas are the contract (ADR 0004) and types.ts mirrors them by hand. Each fixture below
-// is typed with the TypeScript mirror and validated against the schema, so a field that one side
-// adds, removes or renames fails here. The mapped fixture types force at least one fixture per
-// TypeScript method, and the method lists are compared with the schemas' `$defs`. Fixtures fill every
-// optional field and every union member, so a rename on either side cannot go unexercised.
+// The JSON Schemas are the contract (ADR 0004) and types.ts mirrors them as Effect Schemas (ADR 0020).
+// Each fixture below is typed from the Effect Schemas, decoded with them and validated against the
+// JSON Schema, so a field that one side adds, removes or renames fails here. The mapped fixture types
+// force at least one fixture per method, and the method tables are compared with the schemas' `$defs`.
+// Fixtures fill every optional field and every union member, so a rename on either side cannot go
+// unexercised.
 
 const schema = (file: string) => JSON.parse(readFileSync(new URL(`../${file}`, import.meta.url), "utf8")) as { $id: string; $defs?: object };
 const files = ["manifest", "context", "app-methods", "platform-methods", "trace"].map((name) => schema(`${name}.schema.json`));
@@ -34,6 +38,10 @@ const valid = (ref: string, value: unknown) => {
   const validate = ajv.getSchema(ref);
   if (!validate) throw new Error(`no schema ${ref}`);
   return validate(value) ? true : validate.errors;
+};
+const decodes = (schema: Schema.Codec<unknown, unknown, never, never>, value: unknown) => {
+  const decoded = Schema.decodeUnknownResult(schema, parseOptions)(value);
+  return decoded._tag === "Success" ? true : decoded.failure.message;
 };
 
 /** One or more `{ params, result }` cases per method. */
@@ -136,35 +144,52 @@ const signedMethods: Fixtures<SignedPlatformMethods> = {
   ],
 };
 
-const byFile = { "app-methods": appMethods, "platform-methods": { ...platformMethods, ...signedMethods } };
+const byFile = {
+  "app-methods": { schemas: AppMethods, fixtures: appMethods },
+  "platform-methods": { schemas: { ...PlatformMethods, ...SignedPlatformMethods }, fixtures: { ...platformMethods, ...signedMethods } },
+};
 
 describe("protocol contract", () => {
-  it("defines the same methods in the schemas and in types.ts", () => {
+  it("defines the same methods in the JSON Schemas and the Effect Schemas", () => {
     const methodsOf = (name: string) =>
       Object.keys(files.find((file) => file.$id === idOf(name))?.$defs ?? {}).filter((key) => key !== "callbackToken");
-    for (const [file, fixtures] of Object.entries(byFile)) expect(methodsOf(file).sort()).toEqual(Object.keys(fixtures).sort());
+    for (const [file, { schemas }] of Object.entries(byFile)) expect(methodsOf(file).sort()).toEqual(Object.keys(schemas).sort());
   });
 
-  for (const [file, fixtures] of Object.entries(byFile)) {
+  for (const [file, { schemas, fixtures }] of Object.entries(byFile)) {
     for (const [method, cases] of Object.entries(fixtures)) {
-      it(`${file} ${method} matches its schema`, () => {
+      it(`${file} ${method} matches both schemas`, () => {
+        const schema = schemas[method as keyof typeof schemas];
         for (const { params, result } of cases) {
           expect(valid(methodRef(file, method, "params"), params)).toBe(true);
           expect(valid(methodRef(file, method, "result"), result)).toBe(true);
+          expect(decodes(schema.params, params)).toBe(true);
+          expect(decodes(schema.result, result)).toBe(true);
         }
       });
     }
   }
 
-  it("validates a full manifest and a trace member", () => {
+  it("accepts a full manifest and a trace member", () => {
+    const trace = { traceparent: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01" };
     expect(valid(idOf("manifest"), manifest)).toBe(true);
-    expect(valid(idOf("trace"), { traceparent: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01" })).toBe(true);
+    expect(decodes(Manifest, manifest)).toBe(true);
+    expect(valid(idOf("trace"), trace)).toBe(true);
+    expect(decodes(TraceMetadata, trace)).toBe(true);
   });
 
   it("rejects values the schemas forbid", () => {
     const { name: _name, ...nameless } = manifest;
-    expect(valid(idOf("manifest"), nameless)).not.toBe(true);
-    expect(valid(methodRef("platform-methods", "credentials/get", "params"), { name: "crm", tenantId: "acme" })).not.toBe(true);
-    expect(valid(idOf("trace"), { traceparent: "not-a-traceparent" })).not.toBe(true);
+    const rejected = [
+      [idOf("manifest"), Manifest, nameless],
+      [idOf("manifest"), Manifest, { ...manifest, provides: { actions: { "not-an-identifier": manifest.provides.actions?.["upsert"] } } }],
+      [methodRef("platform-methods", "credentials/get", "params"), PlatformMethods["credentials/get"].params, { name: "crm", tenantId: "acme" }],
+      [methodRef("platform-methods", "state/set", "params"), PlatformMethods["state/set"].params, { key: "k", value: 1, version: -1 }],
+      [idOf("trace"), TraceMetadata, { traceparent: "not-a-traceparent" }],
+    ] as const;
+    for (const [ref, schema, value] of rejected) {
+      expect(valid(ref, value)).not.toBe(true);
+      expect(decodes(schema, value)).not.toBe(true);
+    }
   });
 });

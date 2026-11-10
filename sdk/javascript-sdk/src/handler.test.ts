@@ -98,9 +98,16 @@ describe("createHandler", () => {
     expect(missing.body).toMatchObject({ error: { code: ErrorCode.ActionNotFound } });
   });
 
+  it("answers InvalidParams to params the method's schema rejects", async () => {
+    const handle = createHandler(app, { secret, platformUrl });
+    const { body } = await call(handle, "actions/invoke", { action: "echo", input: { text: "hi" }, context });
+    expect(body).toMatchObject({ error: { code: ErrorCode.InvalidParams } });
+  });
+
   it("answers method-not-found for lifecycle hooks the app did not implement", async () => {
     const handle = createHandler(app, { secret, platformUrl });
-    const { body } = await call(handle, "install", { context, callbackToken: "tok" });
+    const { callId: _callId, ...installContext } = context;
+    const { body } = await call(handle, "install", { context: installContext, callbackToken: "tok" });
     expect(body).toMatchObject({ error: { code: ErrorCode.MethodNotFound } });
   });
 });

@@ -45,7 +45,7 @@ export const initializeApp = Effect.fnUntraced(function* (_: Authorized<{ type: 
   const { manifest } = yield* callApp(yield* apps.get(appId), "initialize", "initialize", {}, () => ({
     protocolVersion: PROTOCOL_VERSION,
     platformUrl,
-  }));
+  })).pipe(Effect.catchTag("SchemaError", (error) => Effect.fail(new InvalidManifest({ message: error.message }))));
   yield* checkEndpoints(manifest);
   const version: AppVersion = { id: VersionId.make(crypto.randomUUID()), appId, manifest, pulledAt: yield* DateTime.now };
   yield* apps.update(appId, (app) => (app.latest && sameJson(app.latest.manifest, manifest) ? app : { ...app, latest: version }));
@@ -86,6 +86,7 @@ export const runInstallHook = Effect.fnUntraced(function* (app: AppRecord, insta
     context: { tenantId: install.tenantId, installId: install.id, config: install.config },
     callbackToken: mintCallbackToken(callbackKey, { installId: install.id, callId: null, depth: CallDepth.make(0), trace }, now),
   })).pipe(
+    Effect.catchTag("SchemaError", Effect.die),
     Effect.catchIf(
       (error) => error.code === ErrorCode.MethodNotFound,
       () => Effect.void,

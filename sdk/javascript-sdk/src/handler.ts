@@ -1,17 +1,19 @@
 import {
+  AppMethods,
   ErrorCode,
+  JsonRpcRequest,
   PROTOCOL_VERSION,
   RpcError,
   SIGNATURE_HEADER,
-  isJsonRpcRequest,
+  parseOptions,
   parseTrace,
   verify,
-  type AppMethods,
   type JsonRpcId,
   type JsonRpcResponse,
   type Manifest,
   type TraceParent,
 } from "@totem/protocol";
+import { Schema } from "effect";
 import type { AnyApp, App, Remote } from "./define-app.js";
 import { logFailure, type Observability } from "./observability.js";
 import { platformClient } from "./platform.js";
@@ -94,16 +96,21 @@ export function createHandler<M extends Manifest>(typedApp: App<M>, options: Han
     } catch {
       return reply(null, failure(new RpcError(ErrorCode.ParseError, "invalid JSON")));
     }
-    if (!isJsonRpcRequest(parsed)) {
+    if (!Schema.is(JsonRpcRequest)(parsed)) {
       return reply(null, failure(new RpcError(ErrorCode.InvalidRequest, "not a JSON-RPC 2.0 request")));
     }
     if (!isMethod(parsed.method)) {
       return reply(parsed.id, failure(new RpcError(ErrorCode.MethodNotFound, `unknown method "${parsed.method}"`)));
     }
 
+    const params = Schema.decodeUnknownResult(AppMethods[parsed.method].params, parseOptions)(parsed.params);
+    if (params._tag === "Failure") {
+      return reply(parsed.id, failure(new RpcError(ErrorCode.InvalidParams, params.failure.message)));
+    }
+
     try {
       // The signature has verified, so the trace member can be read (ADR 0016).
-      const result = await methods[parsed.method](parsed.params as never, parseTrace(parsed.trace));
+      const result = await methods[parsed.method](params.success as never, parseTrace(parsed.trace));
       return reply(parsed.id, { result });
     } catch (error) {
       if (error instanceof RpcError) return reply(parsed.id, failure(error));

@@ -1,11 +1,11 @@
 import {
   SIGNATURE_HEADER,
+  SignedPlatformMethods,
   rpc,
   sign,
   type BoundPort,
   type CatalogApp,
   type Manifest,
-  type SignedPlatformMethods,
 } from "@totem/protocol";
 import type { App } from "./define-app.js";
 import { runSigned, type Observability } from "./observability.js";
@@ -32,7 +32,7 @@ export function appClient<M extends Manifest>(
 ) {
   const call = <K extends keyof SignedPlatformMethods>(method: K, params: SignedPlatformMethods[K]["params"]) =>
     runSigned(observability, method, (trace) =>
-      rpc<SignedPlatformMethods, K>(platformUrl, method, params, {
+      rpc(platformUrl, SignedPlatformMethods, method, params, {
         sign: async (body) => ({ [SIGNATURE_HEADER]: await sign(secret, body) }),
         trace,
         ...(doFetch && { fetch: doFetch }),
@@ -47,7 +47,7 @@ export function appClient<M extends Manifest>(
     },
 
     /** Every public app other than this one, with the actions it provides. */
-    async apps(installId: string): Promise<CatalogApp[]> {
+    async apps(installId: string): Promise<readonly CatalogApp[]> {
       return (await call("apps/list", { installId })).apps;
     },
 

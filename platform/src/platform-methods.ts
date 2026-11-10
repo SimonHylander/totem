@@ -1,15 +1,15 @@
 import {
   ErrorCode,
+  JsonRpcRequest,
+  PlatformMethods,
   RpcError,
   SIGNATURE_HEADER,
-  isJsonRpcRequest,
+  SignedPlatformMethods,
+  parseOptions,
   parseTrace,
   verify,
   type JsonRpcId,
-  type JsonRpcRequest,
   type JsonRpcResponse,
-  type PlatformMethods,
-  type SignedPlatformMethods,
 } from "@totem/protocol";
 import { AppId, InstallId } from "@totem/ids";
 import { requireActive, type InstallRepo } from "@totem/installs";
@@ -95,7 +95,9 @@ export const handlePlatformMethod = Effect.fnUntraced(function* (request: Reques
     claims: CallbackClaims,
     params: unknown,
   ) => Effect.Effect<unknown, PlatformError, Services>;
-  const handled = method(claims, parsed.params);
+  const handled = Effect.flatMap(decodeParams(PlatformMethods[parsed.method].params, parsed.params), (params) =>
+    method(claims, params),
+  );
 
   // The token names the platform span that made the call, so callbacks are its children whatever the
   // app sends. The app's own span, if it is in the same trace, becomes a link (ADR 0016).
@@ -110,45 +112,42 @@ export const handlePlatformMethod = Effect.fnUntraced(function* (request: Reques
   );
 });
 
-type Params = Record<string, unknown>;
-
 /**
  * Methods the app signs with its HMAC secret (ADR 0014, ADR 0015). The install is verified before
- * the method runs, and each method checks its own remaining params.
+ * the method runs.
  */
 type SignedMethods = {
   [K in keyof SignedPlatformMethods]: (
     install: Install,
-    params: Params,
+    params: SignedPlatformMethods[K]["params"],
   ) => Effect.Effect<SignedPlatformMethods[K]["result"], PlatformError, Services>;
 };
 
 const signedMethods: SignedMethods = {
-  "actions/start": Effect.fnUntraced(function* (install, params) {
-    if (!("input" in params)) return yield* new BadRequest({ message: "input is required" });
-    const action = yield* string(params, "action");
+  "actions/start": Effect.fnUntraced(function* (install, { action, input }) {
     const active = yield* Effect.fromResult(requireActive(install));
-    return { output: yield* invoke(active, action, params["input"], CallDepth.make(0)) };
+    return { output: yield* invoke(active, action, input, CallDepth.make(0)) };
   }),
 
   "apps/list": (install) => Effect.map(listApps(install), (apps) => ({ apps })),
 
   "ports/list": (install) => Effect.map(listPorts(install), (ports) => ({ ports })),
 
-  "ports/bind": Effect.fnUntraced(function* (install, params) {
-    yield* bindPort(install, yield* string(params, "port"), yield* param(params, "appId", AppId), yield* string(params, "action"));
+  "ports/bind": Effect.fnUntraced(function* (install, { port, appId, action }) {
+    const provider = yield* Schema.decodeEffect(AppId)(appId).pipe(
+      Effect.mapError(() => new BadRequest({ message: "appId is required" })),
+    );
+    yield* bindPort(install, port, provider, action);
     return {};
   }),
 
-  "ports/unbind": Effect.fnUntraced(function* (install, params) {
-    yield* unbindPort(install, yield* string(params, "port"));
+  "ports/unbind": Effect.fnUntraced(function* (install, { port }) {
+    yield* unbindPort(install, port);
     return {};
   }),
 
-  "ports/connect": Effect.fnUntraced(function* (install, params) {
-    const port = yield* string(params, "port");
-    const url = yield* connectPort(install, port, yield* string(params, "credential"), yield* string(params, "returnTo"));
-    return { url };
+  "ports/connect": Effect.fnUntraced(function* (install, { port, credential, returnTo }) {
+    return { url: yield* connectPort(install, port, credential, returnTo) };
   }),
 };
 
@@ -164,8 +163,10 @@ const handleSigned = Effect.fnUntraced(function* (signature: string, body: strin
   if (!isSignedMethod(parsed.method)) {
     return reply(parsed.id, new RpcError(ErrorCode.MethodNotFound, `"${parsed.method}" needs a callback token`));
   }
-  const params: Params = isObject(parsed.params) ? parsed.params : {};
-  const installId = Schema.decodeUnknownOption(InstallId)(params["installId"]);
+  const decoded = yield* Effect.result(decodeParams(SignedPlatformMethods[parsed.method].params, parsed.params));
+  if (decoded._tag === "Failure") return reply(parsed.id, toRpcError(decoded.failure));
+  const params = decoded.success;
+  const installId = Schema.decodeUnknownOption(InstallId)(params.installId);
   if (installId._tag === "None") {
     return reply(parsed.id, new RpcError(ErrorCode.InvalidParams, "installId is required"));
   }
@@ -178,7 +179,7 @@ const handleSigned = Effect.fnUntraced(function* (signature: string, body: strin
   }
   const method = signedMethods[parsed.method] as (
     install: Install,
-    params: Params,
+    params: unknown,
   ) => Effect.Effect<unknown, PlatformError, Services>;
 
   // The signature has verified, so the app's trace member can be the parent (ADR 0016).
@@ -192,19 +193,15 @@ const handleSigned = Effect.fnUntraced(function* (signature: string, body: strin
   );
 });
 
-function isObject(value: unknown): value is Params {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** A required param, decoded with `schema`. */
-function param<S extends Schema.Decoder<unknown>>(params: Params, field: string, schema: S): Effect.Effect<S["Type"], BadRequest> {
-  return Schema.decodeUnknownEffect(schema)(params[field]).pipe(
-    Effect.mapError(() => new BadRequest({ message: `${field} is required` })),
+/** Decode a method's params with its protocol schema. A bad param is BadRequest, so InvalidParams on the wire. */
+function decodeParams<S extends Schema.Codec<unknown, unknown, never, never>>(
+  schema: S,
+  params: unknown,
+): Effect.Effect<S["Type"], BadRequest> {
+  return Schema.decodeUnknownEffect(schema, parseOptions)(params).pipe(
+    Effect.mapError((error) => new BadRequest({ message: error.message })),
   );
 }
-
-/** A required non-empty string param. */
-const string = (params: Params, field: string) => param(params, field, Schema.NonEmptyString);
 
 function parse(body: string): JsonRpcRequest | Response {
   let parsed: unknown;
@@ -213,7 +210,7 @@ function parse(body: string): JsonRpcRequest | Response {
   } catch {
     return reply(null, new RpcError(ErrorCode.ParseError, "invalid JSON"));
   }
-  return isJsonRpcRequest(parsed) ? parsed : reply(null, new RpcError(ErrorCode.InvalidRequest, "not a JSON-RPC 2.0 request"));
+  return Schema.is(JsonRpcRequest)(parsed) ? parsed : reply(null, new RpcError(ErrorCode.InvalidRequest, "not a JSON-RPC 2.0 request"));
 }
 
 /** The JSON-RPC code for each domain failure. AppFailed keeps the app's own code. */

@@ -27,11 +27,11 @@ describe("credential types", () => {
       actions: {
         run: async (_input, ctx) => {
           expectTypeOf(await ctx.credentials.get("crm")).toEqualTypeOf<{
-            type: "oauth2";
-            accessToken: string;
-            expiresAt: string;
+            readonly type: "oauth2";
+            readonly accessToken: string;
+            readonly expiresAt: string;
           }>();
-          expectTypeOf(await ctx.credentials.get("mail")).toEqualTypeOf<{ type: "apiKey"; key: string }>();
+          expectTypeOf(await ctx.credentials.get("mail")).toEqualTypeOf<{ readonly type: "apiKey"; readonly key: string }>();
           // @ts-expect-error undeclared credential
           await ctx.credentials.get("nope");
           return {};
