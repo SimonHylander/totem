@@ -106,8 +106,8 @@ The repo has two zones. Packages, the platform and apps are Effect code. The pro
 
 - **Path:** none yet. Three live approaches:
   - Effect `Schema` decode: 6 platform files, such as `route()` in `platform/src/http.ts` and `callback-token.ts`.
-  - Hand-rolled guards: `isJsonRpcRequest` and `parseTrace` in the protocol, `isObject` in `platform-methods.ts`, an inline object check in `http.ts`, and the field readers in the events `server.ts` files (W12).
-  - `as` casts on parsed JSON, such as `protocol/src/jsonrpc.ts:71` and `examples/hubspot/src/hubspot.ts:60` (W2).
+  - Hand-rolled guards: an inline object check in `http.ts` and the field readers in the events `server.ts` files (W12).
+  - `as` casts on parsed JSON, such as `examples/hubspot/src/hubspot.ts:60` (W2).
 - **Recommendation:** Effect `Schema` everywhere. It is the only approach that types the value from one source, and the protocol and SDK already depend on `effect`. JSON Schema stays the cross-language contract (ADR 0004), and `Schema` decodes values inside TypeScript. Candidate exemplar: `platform/src/callback-token.ts`.
 
 ## Configuration and environment variables (fork)

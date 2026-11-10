@@ -7,4 +7,5 @@ Questions that block or shape upcoming decisions. Move each one into a decision 
 - **Streaming.** SSE on the same connection is decided ([0002](decisions/0002-json-rpc-over-http.md)) but `actions/invoke` is request-response. Shape of progress events and the final result for long-running actions.
 - **Triggers.** Manifest declares them. `events/emit` and subscription are unspecified.
 - **Changes across state keys.** Conditional writes make changes to one key safe (see [0018](decisions/0018-conditional-state-writes.md)). Whether apps need atomic changes that span several keys.
+- **Manifest JSON Schema fields.** The platform decodes a manifest's shape but not its `input`, `output`, `payload` and `config` against the JSON Schema meta-schema (see [0020](decisions/0020-protocol-effect-schemas.md)). Whether it should, and with which validator.
 - **End users in apps.** The events `/integrations` page has no login, and one deployment serves one install (see [0015](decisions/0015-apps-manage-their-ports.md)). Decide how an app signs in its users and creates a tenant install of itself for each new organization.

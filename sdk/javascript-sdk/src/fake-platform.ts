@@ -1,13 +1,15 @@
 import {
   ErrorCode,
+  JsonRpcRequest,
+  PlatformMethods,
   RpcError,
-  isJsonRpcRequest,
+  parseOptions,
   type CredentialValue,
   type JsonRpcResponse,
   type LogLevel,
   type Manifest,
-  type PlatformMethods,
 } from "@totem/protocol";
+import { Schema } from "effect";
 import type { Platform } from "./platform.js";
 import type { Credentials, Ports } from "./types.js";
 
@@ -98,13 +100,15 @@ export function fakePlatform<M extends Manifest>(
 
   const fetch: typeof globalThis.fetch = async (_url, init) => {
     const request: unknown = JSON.parse(String(init?.body));
-    if (!isJsonRpcRequest(request) || !isMethod(request.method)) {
+    if (!Schema.is(JsonRpcRequest)(request) || !isMethod(request.method)) {
       throw new Error(`fakePlatform: not a platform method request: ${String(init?.body)}`);
     }
     let response: JsonRpcResponse;
     try {
-      // Params come off the wire unchecked, as in `createHandler`.
-      response = { jsonrpc: "2.0", id: request.id, result: await call(request.method, request.params as never) };
+      // Decoded as the platform decodes them, so a bad param answers InvalidParams.
+      const params = Schema.decodeUnknownResult(PlatformMethods[request.method].params, parseOptions)(request.params);
+      if (params._tag === "Failure") throw new RpcError(ErrorCode.InvalidParams, params.failure.message);
+      response = { jsonrpc: "2.0", id: request.id, result: await call(request.method, params.success as never) };
     } catch (error) {
       if (!(error instanceof RpcError)) throw error;
       response = { jsonrpc: "2.0", id: request.id, error: error.toJSON() };

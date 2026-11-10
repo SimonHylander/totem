@@ -1,25 +1,33 @@
+import { Option, Schema } from "effect";
 import type { TraceMetadata } from "./trace.js";
+import { parseOptions, type MethodSchemas, type MethodTypes } from "./types.js";
 
-export type JsonRpcId = string | number | null;
+export const JsonRpcId = Schema.Union([Schema.String, Schema.Number, Schema.Null]);
+export type JsonRpcId = typeof JsonRpcId.Type;
 
-export type JsonRpcRequest = {
-  jsonrpc: "2.0";
-  id: JsonRpcId;
-  method: string;
-  params?: unknown;
+/** The envelope only. `params` is decoded with the method's schema once the method is known. */
+export const JsonRpcRequest = Schema.Struct({
+  jsonrpc: Schema.Literal("2.0"),
+  id: JsonRpcId,
+  method: Schema.String,
+  params: Schema.optionalKey(Schema.Unknown),
   /** Unvalidated until `parseTrace` reads it (ADR 0016). */
-  trace?: unknown;
-};
+  trace: Schema.optionalKey(Schema.Unknown),
+});
+export type JsonRpcRequest = typeof JsonRpcRequest.Type;
 
-export type JsonRpcErrorObject = {
-  code: number;
-  message: string;
-  data?: unknown;
-};
+export const JsonRpcErrorObject = Schema.Struct({
+  code: Schema.Number,
+  message: Schema.String,
+  data: Schema.optionalKey(Schema.Unknown),
+});
+export type JsonRpcErrorObject = typeof JsonRpcErrorObject.Type;
 
-export type JsonRpcResponse =
-  | { jsonrpc: "2.0"; id: JsonRpcId; result: unknown }
-  | { jsonrpc: "2.0"; id: JsonRpcId; error: JsonRpcErrorObject };
+export const JsonRpcResponse = Schema.Union([
+  Schema.Struct({ jsonrpc: Schema.Literal("2.0"), id: JsonRpcId, result: Schema.Unknown }),
+  Schema.Struct({ jsonrpc: Schema.Literal("2.0"), id: JsonRpcId, error: JsonRpcErrorObject }),
+]);
+export type JsonRpcResponse = typeof JsonRpcResponse.Type;
 
 /** A JSON-RPC error received from, or to be sent to, the other side. */
 export class RpcError extends Error {
@@ -39,9 +47,6 @@ export class RpcError extends Error {
   }
 }
 
-/** A method table: `{ [method]: { params, result } }`. */
-type MethodTable = Record<string, { params: unknown; result: unknown }>;
-
 type RpcOptions = {
   headers?: Record<string, string>;
   /** Headers computed from the exact request body, such as `X-Totem-Signature`. */
@@ -52,15 +57,17 @@ type RpcOptions = {
 };
 
 /**
- * Send one JSON-RPC request and return its result. Throws `RpcError` for a
- * JSON-RPC error and a plain `Error` for transport failures.
+ * Send one JSON-RPC request to a method of `methods` and return its result, decoded with the
+ * method's schema. Throws `RpcError` for a JSON-RPC error, `Schema.SchemaError` for a result the
+ * schema rejects, and a plain `Error` for transport failures.
  */
-export async function rpc<T extends MethodTable, M extends keyof T & string>(
+export async function rpc<T extends MethodSchemas, M extends keyof T & string>(
   url: string,
+  methods: T,
   method: M,
-  params: T[M]["params"],
+  params: MethodTypes<T>[M]["params"],
   { headers = {}, sign, fetch: doFetch = fetch, trace }: RpcOptions = {},
-): Promise<T[M]["result"]> {
+): Promise<MethodTypes<T>[M]["result"]> {
   const request: JsonRpcRequest = { jsonrpc: "2.0", id: crypto.randomUUID(), method, params, ...(trace && { trace }) };
   const body = JSON.stringify(request);
   const response = await doFetch(url, {
@@ -68,21 +75,15 @@ export async function rpc<T extends MethodTable, M extends keyof T & string>(
     headers: { "content-type": "application/json", ...headers, ...(await sign?.(body)) },
     body,
   });
-  const reply = (await response.json()) as JsonRpcResponse;
-  if ("error" in reply) {
+  const reply = Option.getOrUndefined(Schema.decodeUnknownOption(JsonRpcResponse)(await response.json()));
+  if (reply && "error" in reply) {
     throw new RpcError(reply.error.code, reply.error.message, reply.error.data);
   }
   if (!response.ok) {
     throw new Error(`rpc ${method}: HTTP ${response.status}`);
   }
-  return reply.result as T[M]["result"];
-}
-
-export function isJsonRpcRequest(value: unknown): value is JsonRpcRequest {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as JsonRpcRequest).jsonrpc === "2.0" &&
-    typeof (value as JsonRpcRequest).method === "string"
-  );
+  if (!reply) {
+    throw new Error(`rpc ${method}: not a JSON-RPC 2.0 response`);
+  }
+  return Schema.decodeUnknownSync(methods[method]!.result, parseOptions)(reply.result);
 }

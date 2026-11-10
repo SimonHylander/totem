@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ErrorCode } from "@totem/protocol";
 import { defineApp, type Manifest } from "@totem/sdk";
 import { APP, PLATFORM, testPlatform } from "./test-network.js";
 
@@ -113,6 +114,22 @@ describe("platform", () => {
     expect(forged.status).toBe(401);
   });
 
+  it("answers InvalidParams to a platform method call with bad params", async () => {
+    const careless = defineApp(manifest, {
+      actions: {
+        send: async (_input, ctx) => {
+          await ctx.state.set(1 as never, "x");
+          return { key: "", sent: 0 };
+        },
+      },
+    });
+    const { api, install } = testPlatform(careless);
+    const { installId } = await install();
+
+    const { body } = await api("acme", "POST", `/api/installs/${installId}/actions/send`, { input: {} });
+    expect(body).toMatchObject({ error: { code: ErrorCode.InvalidParams } });
+  });
+
   it("returns CredentialMissing when the tenant has not connected", async () => {
     const { api, installId } = await installed();
     const { status, body } = await api("acme", "POST", `/api/installs/${installId}/actions/send`, { input: {} });
@@ -142,5 +159,16 @@ describe("platform", () => {
 
     const { status } = await api("op", "POST", `/api/apps/${appId}/initialize`);
     expect(status).toBe(422);
+  });
+
+  it("refuses a manifest that does not match the protocol schema", async () => {
+    const malformed = defineApp({ ...manifest, name: "Not A Name" }, { actions: { send: async () => ({ key: "", sent: 0 }) } });
+    const { api, register } = testPlatform(malformed);
+    const appId = await register();
+
+    expect(await api("op", "POST", `/api/apps/${appId}/initialize`)).toMatchObject({
+      status: 422,
+      body: { error: expect.stringContaining("name") },
+    });
   });
 });

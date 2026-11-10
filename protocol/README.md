@@ -39,7 +39,7 @@ Any request may carry a `trace` member beside `params`, defined by [`trace.schem
 
 Responses are HTTP 200 with a JSON-RPC envelope, including JSON-RPC errors. A failed signature or token check is HTTP 401 with an `Unauthorized` error envelope.
 
-`@totem/protocol` (this folder, `src/`) exports TypeScript types for these schemas, the signing helpers and a JSON-RPC client. Both the SDK and the platform use it.
+`@totem/protocol` (this folder, `src/`) exports Effect Schemas for these schemas with the types derived from them ([0020](../docs/decisions/0020-protocol-effect-schemas.md)), the signing helpers and a JSON-RPC client. Both the SDK and the platform use it.
 
 ## Error codes
 

@@ -1,8 +1,8 @@
 import { CallId } from "@totem/ids";
 import { InstallRepo } from "@totem/installs";
-import { RpcError, SIGNATURE_HEADER, formatTrace, rpc, sign, type AppMethods, type TraceParent } from "@totem/protocol";
+import { AppMethods, RpcError, SIGNATURE_HEADER, formatTrace, rpc, sign, type TraceParent } from "@totem/protocol";
 import { AppFailed, AppTransport } from "@totem/runtime";
-import { Clock, Effect, Layer } from "effect";
+import { Clock, Effect, Layer, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { mintCallbackToken } from "./callback-token.js";
 import { Installs, type Install } from "./installs.js";
@@ -36,7 +36,7 @@ export const appTransportLayer = Layer.effect(
           input,
           context: { tenantId: install.tenantId, installId: install.id, config: install.config, callId },
           callbackToken: mintCallbackToken(callbackKey, { installId: install.id, callId, depth, trace }, now),
-        }));
+        })).pipe(Effect.catchTag("SchemaError", Effect.die));
         return output;
       }),
     });
@@ -52,7 +52,8 @@ export const attributesOf = (install: Pick<Install, "tenantId" | "id" | "appId">
 /**
  * Signed JSON-RPC call to an app (ADR 0008) in a client span named `name`. The span goes to the app
  * as the request's trace member, and `params` gets it to mint into the callback token, so the app's
- * callbacks land under this span (ADR 0016). A JSON-RPC error fails with AppFailed, anything else dies.
+ * callbacks land under this span (ADR 0016). A JSON-RPC error fails with AppFailed, a result that does
+ * not match the method's schema fails with SchemaError, and anything else dies.
  */
 export function callApp<M extends keyof AppMethods>(
   app: AppRecord,
@@ -60,14 +61,14 @@ export function callApp<M extends keyof AppMethods>(
   name: string,
   attributes: Record<string, unknown>,
   params: (trace: TraceParent) => AppMethods[M]["params"],
-) {
+): Effect.Effect<AppMethods[M]["result"], AppFailed | Schema.SchemaError> {
   return Effect.useSpan(name, { kind: "client", attributes }, (span) =>
     Effect.gen(function* () {
       const fetch = yield* FetchHttpClient.Fetch;
       const timestamp = Math.floor((yield* Clock.currentTimeMillis) / 1000);
       return yield* Effect.tryPromise({
         try: () =>
-          rpc<AppMethods, M>(app.url, method, params(span), {
+          rpc(app.url, AppMethods, method, params(span), {
             // eslint-disable-next-line no-restricted-syntax -- rpc's signing callback is async
             sign: async (body) => ({ [SIGNATURE_HEADER]: await sign(app.secret.reveal(), body, timestamp) }),
             trace: formatTrace(span),
@@ -77,10 +78,12 @@ export function callApp<M extends keyof AppMethods>(
       });
     }),
   ).pipe(
-    Effect.catch((error) =>
+    Effect.catch((error): Effect.Effect<never, AppFailed | Schema.SchemaError> =>
       error instanceof RpcError
         ? Effect.fail(new AppFailed({ code: error.code, message: error.message, data: error.data }))
-        : Effect.die(error),
+        : Schema.isSchemaError(error)
+          ? Effect.fail(error)
+          : Effect.die(error),
     ),
   );
 }
