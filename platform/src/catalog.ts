@@ -3,7 +3,7 @@ import { declaresPort, providesAction } from "@totem/installs";
 import type { BoundPort, CatalogApp } from "@totem/protocol";
 import { Effect } from "effect";
 import { runInstallHook } from "./apps.js";
-import { credentialStatus, startOAuthConnect } from "./connections.js";
+import { Connections } from "./connections.js";
 import { BadRequest, PortUnbound } from "./errors.js";
 import { Installs, type Install } from "./installs.js";
 import { Store } from "./store.js";
@@ -42,7 +42,7 @@ export const listPorts = Effect.fnUntraced(function* (caller: Install) {
           appId: provider.appId,
           name: provider.version.manifest.name,
           action: caller.bindings.get(port)!.action,
-          credentials: yield* credentialStatus(provider),
+          credentials: yield* (yield* Connections).status(provider),
         }
       : null;
   }
@@ -82,7 +82,7 @@ export const connectPort = Effect.fnUntraced(function* (caller: Install, port: s
   if (URL.parse(returnTo)?.origin !== new URL((yield* (yield* Store).apps.get(caller.appId)).url).origin) {
     return yield* new BadRequest({ message: "returnTo must be on the app's own origin" });
   }
-  return yield* startOAuthConnect(provider, credential, { sessionId: null, returnTo });
+  return yield* (yield* Connections).beginOAuthConnect(provider, credential, { sessionId: null, returnTo });
 });
 
 const declared = Effect.fnUntraced(function* (caller: Install, port: string) {

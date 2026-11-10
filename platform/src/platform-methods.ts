@@ -14,12 +14,11 @@ import {
 import { AppId, InstallId } from "@totem/ids";
 import { requireActive, type InstallRepo } from "@totem/installs";
 import { Clock, Effect, Schema, Tracer } from "effect";
-import type { HttpClient } from "effect/http";
 import { bearerToken } from "./access.js";
 import { CallDepth, forward, invoke, type AppTransport } from "@totem/runtime";
 import { verifyCallbackToken, type CallbackClaims } from "./callback-token.js";
 import { bindPort, connectPort, listApps, listPorts, unbindPort } from "./catalog.js";
-import { getCredential } from "./connections.js";
+import { Connections } from "./connections.js";
 import { BadRequest, NotDeclared, type PlatformError } from "./errors.js";
 import { Installs, type Install } from "./installs.js";
 import { Store, type PlatformConfig } from "./store.js";
@@ -28,7 +27,7 @@ import { Store, type PlatformConfig } from "./store.js";
 // Signed methods are the exception: the app signs them with its HMAC secret and names one of its
 // installs (ADR 0014, ADR 0015).
 
-type Services = Store | Installs | PlatformConfig | HttpClient.HttpClient | AppTransport | InstallRepo;
+type Services = Store | Installs | Connections | PlatformConfig | AppTransport | InstallRepo;
 
 type Methods = {
   [K in keyof PlatformMethods]: (
@@ -40,7 +39,7 @@ type Methods = {
 const LOG_LEVELS = { debug: "Debug", info: "Info", warn: "Warn", error: "Error" } as const;
 
 const methods: Methods = {
-  "credentials/get": (claims, { name }) => getCredential(claims, name),
+  "credentials/get": (claims, { name }) => Connections.use((connections) => connections.get(claims.installId, name)),
 
   "state/get": (claims, { key }) =>
     Effect.map(statefulInstall(claims), (install) => {

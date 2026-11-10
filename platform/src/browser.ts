@@ -1,7 +1,7 @@
 import { InstallId } from "@totem/ids";
 import { Effect, Schema } from "effect";
 import { authorizeInstall, csrfToken, sessionFor, signIn, type Session } from "./access.js";
-import { OAUTH_CALLBACK_PATH, beginOAuthConnect, finishOAuthConnect, type CallbackQuery } from "./connections.js";
+import { Connections, OAUTH_CALLBACK_PATH, type CallbackQuery } from "./connections.js";
 import { BadRequest, Forbidden } from "./errors.js";
 import { PlatformConfig } from "./store.js";
 
@@ -38,13 +38,14 @@ export const handleBrowser = Effect.fnUntraced(function* (request: Request) {
     const installId = yield* Schema.decodeUnknownEffect(InstallId)(connect["installId"]).pipe(
       Effect.mapError(() => new BadRequest({ message: "invalid install ID" })),
     );
-    const auth = yield* authorizeInstall(session.principal, installId, "install.connect");
-    return redirect(yield* beginOAuthConnect(session, auth, connect["name"]!));
+    const { action } = yield* authorizeInstall(session.principal, installId, "install.connect");
+    const owner = { sessionId: session.id, returnTo: null };
+    return redirect(yield* (yield* Connections).beginOAuthConnect(action.install, connect["name"]!, owner));
   }
 
   const callback = CALLBACK.exec(url.pathname)?.groups;
   if (callback && request.method === "GET") {
-    const done = yield* finishOAuthConnect(session, callback["bindingId"]!, yield* callbackQuery(url));
+    const done = yield* (yield* Connections).finishOAuthConnect(session, callback["bindingId"]!, yield* callbackQuery(url));
     if (done.returnTo) return redirect(done.returnTo);
     return page(200, "Connected", `<p>${escape(done.credential)} is connected for tenant ${escape(done.install.tenantId)}.</p>`);
   }

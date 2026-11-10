@@ -83,7 +83,7 @@ The repo has two zones. Packages, the platform and apps are Effect code. The pro
 
 ## Platform state
 
-- **Path:** a `Table` on `Store` in `platform/src/store.ts`. Records are immutable, and each write replaces the record. Installs are the exception: the `Installs` service in `platform/src/installs.ts` is their one writer.
+- **Path:** a `Table` on `Store` in `platform/src/store.ts`. Records are immutable, and each write replaces the record. Installs and connector credentials are the exceptions: the `Installs` service in `platform/src/installs.ts` writes installs, and the `Connections` service in `platform/src/connections.ts` writes OAuth clients and pending connects and is the only caller that writes an install's connections.
 - **Exemplar:** `platform/src/store.ts`. Holds W7.
 - **Enforced by:** unenforced
 - **Why:** state is in memory (ADR 0011), and every table has one writer.
