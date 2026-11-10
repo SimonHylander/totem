@@ -3,7 +3,7 @@ import {
   JsonRpcRequest,
   PlatformMethods,
   RpcError,
-  parseOptions,
+  decodeParams,
   type CredentialValue,
   type JsonRpcResponse,
   type LogLevel,
@@ -105,9 +105,8 @@ export function fakePlatform<M extends Manifest>(
     }
     let response: JsonRpcResponse;
     try {
-      // Decoded as the platform decodes them, so a bad param answers InvalidParams.
-      const params = Schema.decodeUnknownResult(PlatformMethods[request.method].params, parseOptions)(request.params);
-      if (params._tag === "Failure") throw new RpcError(ErrorCode.InvalidParams, params.failure.message);
+      const params = decodeParams(PlatformMethods, request.method, request.params);
+      if (params._tag === "Failure") throw params.failure;
       response = { jsonrpc: "2.0", id: request.id, result: await call(request.method, params.success as never) };
     } catch (error) {
       if (!(error instanceof RpcError)) throw error;

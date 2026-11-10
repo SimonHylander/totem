@@ -1,11 +1,10 @@
-import { Option, Schema } from "effect";
+import { Option, Result, Schema } from "effect";
 import type { TraceMetadata } from "./trace.js";
-import { parseOptions, type MethodSchemas, type MethodTypes } from "./types.js";
+import { ErrorCode, parseOptions, type MethodSchemas, type MethodTypes } from "./types.js";
 
 export const JsonRpcId = Schema.Union([Schema.String, Schema.Number, Schema.Null]);
 export type JsonRpcId = typeof JsonRpcId.Type;
 
-/** The envelope only. `params` is decoded with the method's schema once the method is known. */
 export const JsonRpcRequest = Schema.Struct({
   jsonrpc: Schema.Literal("2.0"),
   id: JsonRpcId,
@@ -86,4 +85,16 @@ export async function rpc<T extends MethodSchemas, M extends keyof T & string>(
     throw new Error(`rpc ${method}: not a JSON-RPC 2.0 response`);
   }
   return Schema.decodeUnknownSync(methods[method]!.result, parseOptions)(reply.result);
+}
+
+/** Decode a method's params as they come off the wire. A mismatch is an InvalidParams `RpcError`. */
+export function decodeParams<T extends MethodSchemas, M extends keyof T & string>(
+  methods: T,
+  method: M,
+  params: unknown,
+): Result.Result<MethodTypes<T>[M]["params"], RpcError> {
+  return Result.mapError(
+    Schema.decodeUnknownResult(methods[method]!.params, parseOptions)(params),
+    (error) => new RpcError(ErrorCode.InvalidParams, error.message),
+  );
 }

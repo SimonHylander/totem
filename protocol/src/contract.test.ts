@@ -15,13 +15,6 @@ import {
   type LogLevel,
 } from "./types.js";
 
-// The JSON Schemas are the contract (ADR 0004) and types.ts mirrors them as Effect Schemas (ADR 0020).
-// Each fixture below is typed from the Effect Schemas, decoded with them and validated against the
-// JSON Schema, so a field that one side adds, removes or renames fails here. The mapped fixture types
-// force at least one fixture per method, and the method tables are compared with the schemas' `$defs`.
-// Fixtures fill every optional field and every union member, so a rename on either side cannot go
-// unexercised.
-
 const schema = (file: string) => JSON.parse(readFileSync(new URL(`../${file}`, import.meta.url), "utf8")) as { $id: string; $defs?: object };
 const files = ["manifest", "context", "app-methods", "platform-methods", "trace"].map((name) => schema(`${name}.schema.json`));
 

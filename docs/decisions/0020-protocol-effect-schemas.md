@@ -16,7 +16,7 @@ Status: Accepted (2026-11-10). Amends the hand-written mirrors in [0010](0010-ty
 
 ## Consequences
 
-- An Effect Schema may accept more than its JSON Schema, never less for a fixture. It checks no `format`, does not check JSON Schema fields against the meta-schema, and takes any `protocolVersion` in `initialize`, so an app can still answer `ProtocolVersionUnsupported`.
+- An Effect Schema may accept more than its JSON Schema, never less for a fixture. It checks no `format` and does not check JSON Schema fields against the meta-schema. Both take any `protocolVersion` in `initialize`, so an app can still answer `ProtocolVersionUnsupported`.
 - Derived types are readonly.
 - `rpc` throws `Schema.SchemaError` for a result its schema rejects. The platform answers `InternalError` for it, except on `initialize`, where it is `InvalidManifest`.
 - Signed methods decode all params before the signature check, so a malformed request answers `InvalidParams` before `Unauthorized`. Empty strings now pass the shape check, and the domain rules reject the unknown names. IDs are still decoded with their branded schemas.

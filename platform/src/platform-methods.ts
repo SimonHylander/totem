@@ -5,7 +5,7 @@ import {
   RpcError,
   SIGNATURE_HEADER,
   SignedPlatformMethods,
-  parseOptions,
+  decodeParams,
   parseTrace,
   verify,
   type JsonRpcId,
@@ -95,9 +95,9 @@ export const handlePlatformMethod = Effect.fnUntraced(function* (request: Reques
     claims: CallbackClaims,
     params: unknown,
   ) => Effect.Effect<unknown, PlatformError, Services>;
-  const handled = Effect.flatMap(decodeParams(PlatformMethods[parsed.method].params, parsed.params), (params) =>
-    method(claims, params),
-  );
+  const params = decodeParams(PlatformMethods, parsed.method, parsed.params);
+  if (params._tag === "Failure") return reply(parsed.id, params.failure);
+  const handled = method(claims, params.success);
 
   // The token names the platform span that made the call, so callbacks are its children whatever the
   // app sends. The app's own span, if it is in the same trace, becomes a link (ADR 0016).
@@ -163,8 +163,8 @@ const handleSigned = Effect.fnUntraced(function* (signature: string, body: strin
   if (!isSignedMethod(parsed.method)) {
     return reply(parsed.id, new RpcError(ErrorCode.MethodNotFound, `"${parsed.method}" needs a callback token`));
   }
-  const decoded = yield* Effect.result(decodeParams(SignedPlatformMethods[parsed.method].params, parsed.params));
-  if (decoded._tag === "Failure") return reply(parsed.id, toRpcError(decoded.failure));
+  const decoded = decodeParams(SignedPlatformMethods, parsed.method, parsed.params);
+  if (decoded._tag === "Failure") return reply(parsed.id, decoded.failure);
   const params = decoded.success;
   const installId = Schema.decodeUnknownOption(InstallId)(params.installId);
   if (installId._tag === "None") {
@@ -192,16 +192,6 @@ const handleSigned = Effect.fnUntraced(function* (signature: string, body: strin
     ),
   );
 });
-
-/** Decode a method's params with its protocol schema. A bad param is BadRequest, so InvalidParams on the wire. */
-function decodeParams<S extends Schema.Codec<unknown, unknown, never, never>>(
-  schema: S,
-  params: unknown,
-): Effect.Effect<S["Type"], BadRequest> {
-  return Schema.decodeUnknownEffect(schema, parseOptions)(params).pipe(
-    Effect.mapError((error) => new BadRequest({ message: error.message })),
-  );
-}
 
 function parse(body: string): JsonRpcRequest | Response {
   let parsed: unknown;
