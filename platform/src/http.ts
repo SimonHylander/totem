@@ -2,7 +2,7 @@ import { AppId, InstallId, TenantId } from "@totem/ids";
 import type { InstallRepo } from "@totem/installs";
 import type { AppTransport } from "@totem/runtime";
 import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
-import { FetchHttpClient, Headers, HttpTraceContext, type HttpClient } from "effect/http";
+import { FetchHttpClient, Headers, HttpTraceContext } from "effect/http";
 import { Principal, authorize, type ManagementAction } from "@totem/permissions";
 import { authenticate, authorizeInstall, bearerToken, hashToken } from "./access.js";
 import {
@@ -17,7 +17,7 @@ import {
 } from "./apps.js";
 import { appTransportLayer, installRepoLayer } from "./adapters.js";
 import { browserRoute, errorPage, handleBrowser } from "./browser.js";
-import { connectApiKey, setOAuthClient } from "./connections.js";
+import { Connections } from "./connections.js";
 import { BadRequest, type PlatformError } from "./errors.js";
 import { handlePlatformMethod } from "./platform-methods.js";
 import { Installs } from "./installs.js";
@@ -35,7 +35,7 @@ export type PlatformOptions = {
   fetch?: typeof fetch;
 };
 
-type Services = Store | Installs | PlatformConfig | HttpClient.HttpClient | AppTransport | InstallRepo;
+type Services = Store | Installs | Connections | PlatformConfig | AppTransport | InstallRepo;
 
 const NonEmpty = Schema.NonEmptyString;
 const PortBinding = Schema.Struct({ installId: InstallId, action: NonEmpty });
@@ -105,7 +105,9 @@ const routes: Route[] = [
     Schema.Struct({ appId: AppId, name: NonEmpty }),
     Schema.Struct({ clientId: NonEmpty, clientSecret: NonEmpty }),
     (principal, { appId, name }, client) =>
-      Effect.flatMap(allowed(principal, { type: "app.setOAuthClient" }), (auth) => setOAuthClient(auth, appId, name, client)),
+      Effect.flatMap(allowed(principal, { type: "app.setOAuthClient" }), (auth) =>
+        Connections.use((connections) => connections.setOAuthClient(auth, appId, name, client)),
+      ),
   ),
   route(
     "POST",
@@ -140,7 +142,7 @@ const routes: Route[] = [
     Schema.Struct({ key: NonEmpty }),
     (principal, { installId, name }, { key }) =>
       authorizeInstall(principal, installId, "install.connect").pipe(
-        Effect.flatMap((auth) => connectApiKey(auth, name, key)),
+        Effect.flatMap((auth) => Connections.use((connections) => connections.connectApiKey(auth, name, key))),
         Effect.as({}),
       ),
   ),
@@ -245,12 +247,14 @@ const handleRequest = (request: Request): Effect.Effect<Response, never, Service
 /** The services every operation runs with. `fetch` reaches apps, and OAuth providers through HttpClient. */
 export function platformLayer({ baseUrl, principals, allowLocalhost = false, fetch }: PlatformOptions) {
   const store = Store.layer(new Map(principals.map(({ token, principal }) => [hashToken(token), Schema.decodeUnknownSync(Principal)(principal)])));
-  return Layer.mergeAll(
-    Layer.provideMerge(Layer.mergeAll(installRepoLayer, appTransportLayer), Layer.merge(store, Installs.layer)),
+  const base = Layer.mergeAll(
+    store,
+    Installs.layer,
     Layer.succeed(PlatformConfig, { baseUrl, allowLocalhost }),
     FetchHttpClient.layer,
     fetch ? Layer.succeed(FetchHttpClient.Fetch, fetch) : Layer.empty,
   );
+  return Layer.provideMerge(Layer.mergeAll(installRepoLayer, appTransportLayer, Connections.layer), base);
 }
 
 /**

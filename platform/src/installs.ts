@@ -15,8 +15,9 @@ import {
 } from "@totem/installs";
 import { requireCompatible, type AppVersion, type IncompatibleVersion } from "@totem/versions";
 import { Context, Effect, Layer, Ref, Result } from "effect";
+import type { Connection, OAuthConnection } from "./connections.js";
 import { NotFound, StateConflict } from "./errors.js";
-import { withEntry, type Connection, type OAuthConnection } from "./store.js";
+import { withEntry } from "./store.js";
 
 // Stored installs and their one writer (docs/contract.md rule 3). Every change to an install goes
 // through `Installs`. Each change reads and writes the whole collection in one atomic step, so the

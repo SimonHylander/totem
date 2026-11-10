@@ -30,7 +30,6 @@ export const registerApp = Effect.fnUntraced(function* (_: Authorized<{ type: "a
     secret: new Sealed(secret),
     latest: null,
     visibility: "internal",
-    oauthBindings: new Map(),
   };
   yield* (yield* Store).apps.put(app);
   return { appId: app.id, secret };

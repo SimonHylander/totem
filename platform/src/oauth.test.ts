@@ -45,9 +45,10 @@ const crmApp = defineApp(manifest, {
 
 /**
  * In-memory provider: the OAuth token endpoint and one API route. `expiresIn` controls how soon
- * tokens go stale. `holdRefresh` pauses refresh requests until the returned function releases them.
+ * tokens go stale, and `refreshable: false` issues no refresh tokens. `holdRefresh` pauses refresh
+ * requests until the returned function releases them.
  */
-function fakeProvider({ expiresIn = 1800 } = {}) {
+function fakeProvider({ expiresIn = 1800, refreshable = true } = {}) {
   const codes = new Set<string>();
   const accessTokens = new Set<string>();
   const refreshTokens = new Set<string>();
@@ -61,7 +62,8 @@ function fakeProvider({ expiresIn = 1800 } = {}) {
     issued += 1;
     accessTokens.add(`at${issued}`);
     refreshTokens.add(`rt${issued}`);
-    return Response.json({ access_token: `at${issued}`, refresh_token: `rt${issued}`, expires_in: expiresIn });
+    const refresh = refreshable ? { refresh_token: `rt${issued}` } : {};
+    return Response.json({ access_token: `at${issued}`, ...refresh, expires_in: expiresIn });
   };
 
   const handle = async (request: Request): Promise<Response> => {
@@ -115,7 +117,7 @@ function fakeProvider({ expiresIn = 1800 } = {}) {
 
 const client = { clientId: "crm-client", clientSecret: "crm-secret" };
 
-async function setup(options?: { expiresIn?: number }) {
+async function setup(options?: { expiresIn?: number; refreshable?: boolean }) {
   const provider = fakeProvider(options);
   const env = testPlatform(crmApp, provider.external);
   // The app calls the provider with the global fetch.
@@ -275,8 +277,8 @@ const consumer = defineApp(
 );
 
 describe("ports/connect", () => {
-  async function connectSetup() {
-    const env = await setup();
+  async function connectSetup(options?: { expiresIn?: number; refreshable?: boolean }) {
+    const env = await setup(options);
     await env.api("op", "PUT", `/api/apps/${env.appId}/visibility`, { visibility: "public" });
     const own = await env.install({ other: consumer });
     const client = appClient(consumer, { secret: env.secrets.get(own.appId)!, platformUrl: `${PLATFORM}/rpc`, fetch: env.network });
@@ -296,6 +298,17 @@ describe("ports/connect", () => {
     expect(callback.headers.get("location")).toBe(`${origin}/integrations`);
     expect((await client.ports(own.installId)).whoami?.credentials).toEqual({ crm: { type: "oauth2", connected: true } });
     expect(await client.start(own.installId, "who", {})).toEqual({ account: "acme-crm" });
+  });
+
+  it("reports a grant that expired with no refresh token as not connected", async () => {
+    const { client, own, origin, provider, platform, advance, whoami } = await connectSetup({ expiresIn: 60, refreshable: false });
+    const url = await client.connect(own.installId, "whoami", "crm", `${origin}/integrations`);
+    await platform.handle(new Request(PLATFORM + provider.consent(url)));
+    expect((await client.ports(own.installId)).whoami?.credentials).toEqual({ crm: { type: "oauth2", connected: true } });
+
+    await advance("2 minutes");
+    expect((await whoami()).body).toMatchObject({ error: { code: ErrorCode.CredentialMissing } });
+    expect((await client.ports(own.installId)).whoami?.credentials).toEqual({ crm: { type: "oauth2", connected: false } });
   });
 
   it("refuses a returnTo off the app's origin", async () => {
