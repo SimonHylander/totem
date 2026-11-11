@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ErrorCode, SIGNATURE_HEADER, sign } from "@totem/protocol";
 import { appClient, defineApp, type Manifest } from "@totem/sdk";
-import { PLATFORM, testPlatform } from "./test-network.js";
+import { PLATFORM, testPlatform } from "../testing/test-network.js";
 
 /** Counts how often `count` ran on each install, in install state. */
 const counter = defineApp(

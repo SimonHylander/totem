@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ErrorCode } from "@totem/protocol";
 import { defineApp, type Manifest } from "@totem/sdk";
-import { APP, PLATFORM, testPlatform } from "./test-network.js";
+import { APP, PLATFORM, testPlatform } from "./testing/test-network.js";
 
 const manifest = {
   name: "mailer",

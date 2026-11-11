@@ -3,9 +3,9 @@ import { AppMethods, RpcError, SIGNATURE_HEADER, formatTrace, rpc, sign, type Tr
 import { AppFailed, AppTransport } from "@totem/runtime";
 import { Clock, Effect, Layer, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
-import { Apps, type AppRecord } from "./apps.js";
+import { Apps, type AppRecord } from "../apps/apps.js";
 import { CallbackKey, mintCallbackToken } from "./callback-token.js";
-import type { Install } from "./installs.js";
+import type { Install } from "../installs/installs.js";
 
 // Calls from the platform to apps: signed JSON-RPC over HTTP, and the AppTransport adapter built on it.
 

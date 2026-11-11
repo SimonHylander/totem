@@ -1,7 +1,7 @@
 ---------------------------- MODULE OAuthConnect ----------------------------
 (***************************************************************************)
 (* The OAuth connect flow of one install's credential (ADR 0012, ADR 0015, *)
-(* platform/src/connections.ts), with every interleaving of:              *)
+(* platform/src/connections/connections.ts), with every interleaving of:  *)
 (*   - operators changing the OAuth client (a new binding generation),     *)
 (*   - connects started, and their callbacks taking the pending state,     *)
 (*   - token exchanges that finish later,                                  *)
