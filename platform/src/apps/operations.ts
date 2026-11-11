@@ -11,8 +11,6 @@ import type { Install } from "../installs/installs.js";
 import { Sealed, randomToken } from "../secrets.js";
 import { Apps, type AppRecord, type Visibility } from "./apps.js";
 
-// App registration, manifest pull and visibility, and the catalog of public apps.
-
 /**
  * Register an app URL and issue its HMAC secret, shown once. The operator starts the app with the
  * secret, then calls `initializeApp` to pull the manifest.
@@ -47,7 +45,6 @@ export const initializeApp = Effect.fnUntraced(function* (_: Authorized<{ type: 
   return manifest;
 });
 
-/** Make an app public or internal (ADR 0015). New apps start internal. */
 export const setVisibility = Effect.fnUntraced(function* (
   _: Authorized<{ type: "app.setVisibility" }>,
   appId: AppId,
@@ -56,7 +53,6 @@ export const setVisibility = Effect.fnUntraced(function* (
   yield* (yield* Apps).update(appId, (app) => ({ ...app, visibility }));
 });
 
-/** `apps/list`: every initialized public app other than the caller. */
 export const listApps = (caller: Install) =>
   Apps.use((apps) =>
     Effect.map(apps.all, (all) =>
@@ -76,10 +72,6 @@ export const listApps = (caller: Install) =>
     ),
   );
 
-/**
- * Provider endpoints receive client secrets and refresh tokens, so check the parsed URL rather
- * than trusting the schema pattern alone (ADR 0012).
- */
 const checkEndpoints = Effect.fnUntraced(function* (manifest: Manifest) {
   const { allowLocalhost } = yield* PlatformConfig;
   for (const [name, need] of Object.entries(manifest.needs.credentials ?? {})) {

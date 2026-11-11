@@ -7,12 +7,8 @@ import { BadRequest, type PlatformError } from "../errors.js";
 import { routes as installRoutes } from "../installs/routes.js";
 import type { Services } from "../platform.js";
 
-// The management API. Routes decode the request, authorize it and call one operation with the
-// proof. This is the only place that maps domain failures to HTTP statuses.
-
 const routes = [...appRoutes, ...installRoutes, ...connectionRoutes];
 
-/** The HTTP status for each domain failure. */
 export const STATUS: { [K in PlatformError["_tag"]]: number } = {
   Unauthenticated: 401,
   Forbidden: 403,
@@ -32,7 +28,6 @@ export const STATUS: { [K in PlatformError["_tag"]]: number } = {
   InvalidManifest: 422,
   ProviderFailed: 502,
   StateConflict: 409,
-  // A JSON-RPC error from an app: a failed action or a protocol error. The body keeps its code and data.
   AppFailed: 422,
 };
 

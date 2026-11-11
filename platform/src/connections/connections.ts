@@ -8,36 +8,23 @@ import type { InstallAction, Session } from "../access/access.js";
 import { BadRequest, Conflict, CredentialMissing, Forbidden, NotDeclared, NotFound, ProviderFailed } from "../errors.js";
 import { Installs, type Install } from "../installs/installs.js";
 import { Apps } from "../apps/apps.js";
-import { OAUTH_CALLBACK_PATH } from "../http/paths.js";
+import { oauthCallbackPath } from "../http/paths.js";
 import { PlatformConfig } from "../config.js";
 import { Sealed, randomToken } from "../secrets.js";
 import { withEntry } from "../table.js";
 
-// Connector credentials (ADR 0009, ADR 0012). Tenants connect them, the platform stores and
-// refreshes them, and `credentials/get` hands the current value to the app. `Connections` is the one
-// writer of OAuth clients and pending connects, and the only caller that writes an install's
-// connections through `Installs`.
-
 const CONNECT_TTL = { minutes: 10 };
-/** `credentials/get` refreshes first when less than this remains on the access token. */
 const REFRESH_MARGIN = { minutes: 5 };
 
-/**
- * The provider OAuth client for one oauth2 credential, set by an operator (ADR 0012). Rotating the
- * secret of the same client keeps its `generation`. A different client ID or different endpoints
- * start a new generation, so grants made under the old client are never sent to the new endpoints.
- */
 export type OAuthBinding = {
   /**
    * Names the redirect URI. Derived from the endpoints, so the URI survives a restart and can be
    * registered at the provider ahead of time. Two bindings for one provider share it.
    */
   readonly id: string;
-  /** Grants and pending connects hold it. One that differs from the current client's reads as missing. */
   readonly generation: string;
   readonly clientId: string;
   readonly clientSecret: Sealed;
-  /** The manifest endpoints when the operator set this client. The platform calls only these. */
   readonly pinned: { readonly authorizeUrl: Endpoint; readonly tokenUrl: Endpoint };
 };
 
@@ -48,26 +35,20 @@ export type OAuthBinding = {
 export type Connection =
   | {
       readonly type: "oauth2";
-      /** The generation of the client that issued these tokens. */
       readonly generation: string;
       readonly accessToken: Sealed;
       readonly expiresAt: DateTime.Utc;
-      /** Null if the provider issued none. The connection then ends at `expiresAt`. */
       readonly refreshToken: Sealed | null;
-      /** Token response fields other than the tokens, kept as returned. */
       readonly providerFields: Readonly<Record<string, unknown>>;
     }
   | { readonly type: "apiKey"; readonly key: Sealed };
 
 export type OAuthConnection = Extract<Connection, { type: "oauth2" }>;
 
-/** An OAuth connect in progress. Keyed by its `state` value and removed on first use. */
 type PendingConnect = {
   readonly installId: InstallId;
   readonly credential: string;
-  /** The binding whose callback must receive the code. */
   readonly bindingId: string;
-  /** The client generation the connect started under. */
   readonly generation: string;
   /**
    * Only the session that started the connect may finish it. Null when an app started it through
@@ -79,10 +60,8 @@ type PendingConnect = {
   readonly expiresAt: DateTime.Utc;
 };
 
-/** Who started a connect, and where its callback returns to. */
 type ConnectOwner = Pick<PendingConnect, "sessionId" | "returnTo">;
 
-/** The provider's redirect query, parsed by the route. RFC 6749 section 4.1.2. */
 export type CallbackQuery = { state: string } & ({ code: string } | { error: string });
 
 export class Connections extends Context.Service<
@@ -140,19 +119,15 @@ export class Connections extends Context.Service<
       const { baseUrl } = yield* PlatformConfig;
       const http = yield* HttpClient.HttpClient;
 
-      /** The current OAuth client by app, then by credential name. */
       const clients = yield* Ref.make<ReadonlyMap<AppId, ReadonlyMap<string, OAuthBinding>>>(new Map());
-      /** Keyed by `state`. */
       const pending = yield* Ref.make<ReadonlyMap<string, PendingConnect>>(new Map());
-      /** One in-flight refresh per connection record. Concurrent `credentials/get` calls await it. */
       const refreshes = new WeakMap<OAuthConnection, Deferred.Deferred<OAuthConnection | null, ProviderFailed>>();
 
       /** Each provider has its own callback, so a code from one provider cannot reach another's token URL. */
-      const redirectUriFor = (bindingId: string) => `${baseUrl}${OAUTH_CALLBACK_PATH}/${bindingId}`;
+      const redirectUriFor = (bindingId: string) => baseUrl + oauthCallbackPath(bindingId);
 
       const clientOf = (appId: AppId, name: string) => Effect.map(Ref.get(clients), (all) => all.get(appId)?.get(name));
 
-      /** The current client for an oauth2 credential, checked against the manifest's endpoints. */
       const oauthBinding = Effect.fnUntraced(function* (install: Install, name: string) {
         const need = install.version.manifest.needs.credentials?.[name];
         if (need?.type !== "oauth2") return yield* new NotFound({ message: `no oauth2 credential ${name}` });
@@ -203,7 +178,6 @@ export class Connections extends Context.Service<
         binding: OAuthBinding,
         connection: OAuthConnection,
       ) {
-        // Without a refresh token the connection ends at expiresAt.
         if (!connection.refreshToken) return (yield* DateTime.isPast(connection.expiresAt)) ? null : connection;
 
         const body = yield* tokenRequest(binding, {
@@ -212,7 +186,6 @@ export class Connections extends Context.Service<
         });
         const refreshed = body === "invalid_grant" ? undefined : yield* toConnection(binding, body, connection.refreshToken);
 
-        // A reconnect that replaced the record we read wins over this refresh.
         return yield* installs.replaceConnection(install.id, name, connection, refreshed);
       });
 
@@ -342,8 +315,7 @@ export class Connections extends Context.Service<
 
           const stale = DateTime.isLessThanOrEqualTo(connection.expiresAt, DateTime.add(now, REFRESH_MARGIN));
           const fresh = stale ? yield* refresh(install, name, binding, connection) : connection;
-          // The client may have changed while the refresh ran. A grant of the old client reads as missing.
-          if (!fresh || (stale && fresh.generation !== (yield* clientOf(install.appId, name))?.generation)) return yield* missing;
+          if (!fresh || !connected(need, fresh, yield* clientOf(install.appId, name), now)) return yield* missing;
           return {
             type: "oauth2",
             accessToken: fresh.accessToken.reveal(),
@@ -355,10 +327,6 @@ export class Connections extends Context.Service<
   );
 }
 
-/**
- * Whether `connection` can serve `need` now. An oauth2 grant counts while the current client issued
- * it and it can still produce a token: it has a refresh token, or its access token has not expired.
- */
 function connected(need: CredentialNeed, connection: Connection | undefined, client: OAuthBinding | undefined, now: DateTime.Utc): boolean {
   if (connection?.type !== need.type) return false;
   if (connection.type === "apiKey") return true;
@@ -368,14 +336,12 @@ function connected(need: CredentialNeed, connection: Connection | undefined, cli
 const TOKEN_TIMEOUT = "10 seconds";
 const JsonObject = Schema.Record(Schema.String, Schema.Unknown);
 const TokenError = Schema.Struct({ error: Schema.String });
-/** RFC 6749 section 5.1. The other fields of the response are kept as `providerFields`. */
 const TokenFields = Schema.Struct({
   access_token: Schema.String,
   expires_in: Schema.Number,
   refresh_token: Schema.optionalKey(Schema.String),
 });
 
-/** Parse a token response. Keeps the old refresh token when none is returned. */
 const toConnection = Effect.fnUntraced(function* (
   binding: OAuthBinding,
   body: Readonly<Record<string, unknown>>,

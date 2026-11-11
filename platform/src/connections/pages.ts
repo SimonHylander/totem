@@ -3,12 +3,9 @@ import { Effect, Schema } from "effect";
 import { authorizeInstall, csrfToken, type Session } from "../access/access.js";
 import { BadRequest, Forbidden } from "../errors.js";
 import { escape, html, redirect } from "../http/html.js";
-import { OAUTH_CALLBACK_PATH } from "../http/paths.js";
+import { oauthCallbackPath } from "../http/paths.js";
 import { page } from "../http/route.js";
 import { Connections, type CallbackQuery } from "./connections.js";
-
-// OAuth consent is a browser flow, so connecting runs on pages with a session cookie instead of on
-// the bearer-token API (ADR 0011).
 
 export const pages = [
   page(
@@ -27,7 +24,7 @@ export const pages = [
     }),
   ),
   page(
-    `${OAUTH_CALLBACK_PATH}/:bindingId`,
+    oauthCallbackPath(":bindingId"),
     Effect.fnUntraced(function* (request, { bindingId }, session) {
       if (request.method !== "GET") return html(404, "Not found", "");
       const done = yield* (yield* Connections).finishOAuthConnect(session, bindingId!, yield* callbackQuery(new URL(request.url)));

@@ -5,9 +5,6 @@ import { appClient, defineApp, type Manifest } from "@totem/sdk";
 import { Apps } from "../apps/apps.js";
 import { PLATFORM, testPlatform } from "../testing/test-network.js";
 
-// The platform runs generic OAuth 2.0 (ADR 0012), so these tests use a made-up provider. The app
-// declares the provider's endpoints and calls its API with whatever token the platform hands over.
-
 const manifest = {
   name: "crm",
   version: "0.1.0",
@@ -53,7 +50,6 @@ function fakeProvider({ expiresIn = 1800, refreshable = true } = {}) {
   const accessTokens = new Set<string>();
   const refreshTokens = new Set<string>();
   const tokenRequests: Record<string, string>[] = [];
-  /** The traceparent header of each token request. */
   const traceHeaders: (string | null)[] = [];
   let issued = 0;
   let hold: Promise<void> | null = null;
@@ -91,7 +87,6 @@ function fakeProvider({ expiresIn = 1800, refreshable = true } = {}) {
   return {
     tokenRequests,
     traceHeaders,
-    /** The provider's consent screen: the user approves and the provider issues a code for the redirect. */
     consent(authorizeUrl: string) {
       const params = new URL(authorizeUrl).searchParams;
       const code = `code${codes.size + issued}`;
@@ -101,7 +96,6 @@ function fakeProvider({ expiresIn = 1800, refreshable = true } = {}) {
       redirect.searchParams.set("state", params.get("state")!);
       return redirect.pathname + redirect.search;
     },
-    /** Revoke every refresh token, as uninstalling the provider app does. */
     revoke: () => refreshTokens.clear(),
     holdRefresh() {
       let release!: () => void;
@@ -120,13 +114,11 @@ const client = { clientId: "crm-client", clientSecret: "crm-secret" };
 async function setup(options?: { expiresIn?: number; refreshable?: boolean }) {
   const provider = fakeProvider(options);
   const env = testPlatform(crmApp, provider.external);
-  // The app calls the provider with the global fetch.
   vi.stubGlobal("fetch", env.network);
   const { appId, installId } = await env.install();
   const { body: oauthClient } = await env.api("op", "PUT", `/api/apps/${appId}/oauth-clients/crm`, client);
   const alice = await env.browser("acme");
 
-  /** Alice connects through the browser. Returns the callback response. */
   const connect = async () => {
     const authorizeUrl = (await alice.connect(installId, "crm")).headers.get("location")!;
     return alice.get(provider.consent(authorizeUrl));
@@ -264,7 +256,6 @@ describe("expiry", () => {
   });
 });
 
-/** A consumer whose `whoami` port reaches the CRM app, as the events app reaches HubSpot. */
 const consumer = defineApp(
   {
     name: "consumer",

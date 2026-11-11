@@ -19,7 +19,6 @@ export type PlatformOptions = {
   fetch?: typeof fetch;
 };
 
-/** The services every operation runs with. `fetch` reaches apps, and OAuth providers through HttpClient. */
 export function platformLayer({ baseUrl, principals, allowLocalhost = false, fetch }: PlatformOptions) {
   const apiTokens = new Map(principals.map(({ token, principal }) => [hashToken(token), Schema.decodeUnknownSync(Principal)(principal)]));
   const base = Layer.mergeAll(
@@ -34,7 +33,6 @@ export function platformLayer({ baseUrl, principals, allowLocalhost = false, fet
   return Layer.provideMerge(Layer.mergeAll(installRepoLayer, appTransportLayer, Connections.layer), base);
 }
 
-/** What `platformLayer` provides, and so what every route, platform method and page may use. */
 export type Services = Layer.Success<ReturnType<typeof platformLayer>>;
 
 /**
@@ -44,7 +42,6 @@ export type Services = Layer.Success<ReturnType<typeof platformLayer>>;
  */
 export function createPlatform<R = never>(options: PlatformOptions, layer: Layer.Layer<R> = Layer.empty as Layer.Layer<R>) {
   const runtime = ManagedRuntime.make(Layer.merge(platformLayer(options), layer));
-  // eslint-disable-next-line no-restricted-syntax -- the fetch-style handler servers call
-  const handle = (request: Request): Promise<Response> => runtime.runPromise(handleRequest(request));
+  const handle = (request: Request) => runtime.runPromise(handleRequest(request));
   return { handle, runtime };
 }

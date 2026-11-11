@@ -21,18 +21,12 @@ import { Installs, type Install } from "../installs/installs.js";
 import { methods as installMethods, signedMethods as installSignedMethods } from "../installs/methods.js";
 import type { Services } from "../platform.js";
 
-// The endpoint apps call (ADR 0008). The callback token names the install, so params carry no tenant.
-// Signed methods are the exception: the app signs them with its HMAC secret and names one of its
-// installs (ADR 0014, ADR 0015). Each capability folder declares its own methods, and the types
-// below fail the build when one in the protocol has no handler.
-
 const LOG_LEVELS = { debug: "Debug", info: "Info", warn: "Warn", error: "Error" } as const;
 
 const methods: MethodHandlers<typeof PlatformMethods, CallbackClaims, PlatformError, Services> = {
   ...connectionMethods,
   ...installMethods,
 
-  // The app's own line. It runs under the call's span and opens none (ADR 0016).
   log: ({ level, message, data }, { auth: claims }) =>
     Effect.logWithLevel(LOG_LEVELS[level])(message, ...(data ? [data] : [])).pipe(
       Effect.annotateLogs({ source: "app", installId: claims.installId, ...(claims.callId && { callId: claims.callId }) }),
@@ -40,7 +34,6 @@ const methods: MethodHandlers<typeof PlatformMethods, CallbackClaims, PlatformEr
     ),
 };
 
-/** Handle one JSON-RPC request from an app. */
 export const handlePlatformMethod = (request: Request) =>
   request.headers.get(SIGNATURE_HEADER) !== null ? signedEndpoint(request) : callbackEndpoint(request);
 
@@ -108,7 +101,6 @@ const signedEndpoint = endpoint({
   unknownMethod: (method) => `"${method}" needs a callback token`,
 });
 
-/** The JSON-RPC code for each domain failure. AppFailed keeps the app's own code. */
 const RPC_CODES: { [K in Exclude<PlatformError["_tag"], "AppFailed">]: number } = {
   Unauthenticated: ErrorCode.Unauthorized,
   Forbidden: ErrorCode.Unauthorized,

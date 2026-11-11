@@ -22,7 +22,6 @@ export const principals = [
 
 type External = (request: Request) => Promise<Response> | null;
 
-/** A tracer that keeps every span it starts, for the platform and the apps to share. */
 export function spanRecorder() {
   const spans: Tracer.Span[] = [];
   const tracer = Tracer.make({
@@ -54,7 +53,6 @@ export function testPlatform<M extends Manifest>(
   const traced = tracer ? Layer.succeed(Tracer.Tracer, tracer) : Layer.empty;
   const observability = tracer ? { runtime: ManagedRuntime.make(traced) } : {};
   const apps = new Map<string, (request: Request) => Promise<Response>>();
-  /** HMAC secrets by app ID, as registration returned them. */
   const secrets = new Map<string, string>();
   const network: typeof fetch = async (input, init) => {
     const request = new Request(input, init);
@@ -66,10 +64,8 @@ export function testPlatform<M extends Manifest>(
     return response;
   };
   const platform = createPlatform({ baseUrl: PLATFORM, principals: [...principals], fetch: network }, Layer.merge(testClock, traced));
-  /** Move the platform's clock forward. */
   const advance = (duration: Duration.Input) => platform.runtime.runPromise(TestClock.adjust(duration));
 
-  /** Call the management API with a bearer token. */
   const api = async (token: string, method: string, path: string, body?: unknown) => {
     const response = await platform.handle(
       new Request(PLATFORM + path, {
@@ -103,7 +99,6 @@ export function testPlatform<M extends Manifest>(
     return { appId, installId: body["installId"] as string };
   };
 
-  /** A browser signed in with a management token. It keeps its session cookie. */
   const browser = async (token: string) => {
     const signedIn = await platform.handle(
       new Request(`${PLATFORM}/signin`, { method: "POST", body: new URLSearchParams({ token, next: "/" }) }),
@@ -115,7 +110,6 @@ export function testPlatform<M extends Manifest>(
     return {
       cookie,
       get: (path: string) => send(path),
-      /** Open the connect page and press Connect. Resolves to the redirect. */
       connect: async (installId: string, name: string) => {
         const html = await (await send(`/installs/${installId}/connect/${name}`)).text();
         const csrf = /name="csrf" value="([^"]+)"/.exec(html)![1]!;
