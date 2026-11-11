@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { defineApp, type Manifest } from "@totem/sdk";
 import { PLATFORM, spanRecorder, testPlatform } from "./testing/test-network.js";
 
-// One operation is one trace across the platform and every app it calls (ADR 0016).
-
 const text = { type: "object", required: ["text"], properties: { text: { type: "string" } } } as const;
 
 const shouter = defineApp(
@@ -52,7 +50,6 @@ describe("tracing", () => {
     expect(parentOf("POST /api/installs/:installId/actions/:action")).toBe("b7ad6b7169203331");
     expect(parentOf("invoke run")).toBe(named("POST /api/installs/:installId/actions/:action").spanId);
     expect(parentOf("action run")).toBe(named("invoke run").spanId);
-    // The callback hangs off the span in the token. The app's own span is only a link.
     expect(parentOf("rpc actions/invoke")).toBe(named("invoke run").spanId);
     expect(named("rpc actions/invoke").links.map((link) => link.span.spanId)).toEqual([named("action run").spanId]);
     expect(parentOf("invoke shout")).toBe(named("rpc actions/invoke").spanId);

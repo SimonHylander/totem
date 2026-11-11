@@ -7,9 +7,6 @@ import { Apps, type AppRecord } from "../apps/apps.js";
 import { CallbackKey, mintCallbackToken } from "./callback-token.js";
 import type { Install } from "../installs/installs.js";
 
-// Calls from the platform to apps: signed JSON-RPC over HTTP, and the AppTransport adapter built on it.
-
-/** Actions run as `actions/invoke` with a fresh call ID and a callback token that carries the depth. */
 export const appTransportLayer = Layer.effect(
   AppTransport,
   Effect.gen(function* () {

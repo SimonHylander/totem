@@ -12,11 +12,6 @@ import { Connections } from "../connections/connections.js";
 import { BadRequest, Conflict, PortUnbound } from "../errors.js";
 import { Installs, type Install } from "./installs.js";
 
-// Install operations: create, install hook, bind, upgrade and invoke. The port operations an app
-// signs with its HMAC secret (ADR 0015) let its own UI bind, unbind and connect its ports. The
-// calling install is already authenticated, and every install they touch belongs to its tenant.
-
-/** Install an app for a tenant, bind its ports and run its optional `install` hook. */
 export const createInstall = Effect.fnUntraced(function* (
   { action: { tenantId } }: Authorized<{ type: "install.create"; tenantId: TenantId }>,
   appId: AppId,
@@ -51,7 +46,6 @@ export const runInstallHook = Effect.fnUntraced(function* (app: AppRecord, insta
   return yield* installs.activate(install.id);
 });
 
-/** Set or replace one port binding on an existing install. */
 export const setBinding = Effect.fnUntraced(function* (
   { action: { install } }: Authorized<InstallAction<"install.bind">>,
   port: string,
@@ -60,17 +54,12 @@ export const setBinding = Effect.fnUntraced(function* (
   yield* (yield* Installs).bind(install.id, port, binding);
 });
 
-/**
- * Move an install to its app's latest version if the change is compatible (ADR 0017). Returns the
- * version the install runs afterwards.
- */
 export const upgradeInstall = Effect.fnUntraced(function* ({ action: { install } }: Authorized<InstallAction<"install.upgrade">>) {
   const latest = (yield* (yield* Apps).get(install.appId)).latest ?? install.version;
   // Installs compares with the stored version inside the write, so a concurrent upgrade cannot be skipped over.
   return yield* (yield* Installs).upgrade(install.id, latest);
 });
 
-/** Run one action and return its output. App failures surface as AppFailed. */
 export const invokeAction = Effect.fnUntraced(function* (
   { action: { install } }: Authorized<InstallAction<"install.invoke">>,
   action: string,
@@ -80,7 +69,6 @@ export const invokeAction = Effect.fnUntraced(function* (
   return yield* invoke(active, action, input, CallDepth.make(0));
 });
 
-/** `ports/list`: each declared port with its provider, or null when unbound. */
 export const listPorts = Effect.fnUntraced(function* (caller: Install) {
   const ports: Record<string, BoundPort | null> = {};
   for (const port of Object.keys(caller.version.manifest.needs.actions ?? {})) {

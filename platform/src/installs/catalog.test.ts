@@ -18,7 +18,6 @@ const shouter = defineApp(
   { actions: { shout: async ({ text }) => ({ text: text.toUpperCase() }) } },
 );
 
-/** Calls whatever its `loud` port is bound to. */
 const caller = defineApp(
   {
     name: "caller",

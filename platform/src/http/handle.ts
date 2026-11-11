@@ -6,7 +6,6 @@ import { browserRoute, errorPage, handleBrowser } from "./pages.js";
 import { PLATFORM_METHODS_PATH } from "./paths.js";
 import { handlePlatformMethod } from "./rpc.js";
 
-/** Route one request to the management API, the platform-methods endpoint or the browser pages. */
 export const handleRequest = (request: Request): Effect.Effect<Response, never, Services> => {
   const { pathname } = new URL(request.url);
   const handled: Effect.Effect<Response, PlatformError, Services> =

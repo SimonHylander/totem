@@ -52,7 +52,6 @@ export const signedMethods = {
   }),
 } satisfies SignedMethods;
 
-/** The calling install, if its manifest declares state. */
 const statefulInstall = Effect.fnUntraced(function* (claims: CallbackClaims) {
   const install = yield* (yield* Installs).get(claims.installId);
   if (install.version.manifest.needs.state !== true) {

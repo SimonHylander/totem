@@ -80,7 +80,6 @@ describe("app versions", () => {
     const { appId, installId } = await env.install({ other: consumer });
     const client = appClient(consumer, { secret: env.secrets.get(appId)!, platformUrl: `${PLATFORM}/rpc`, fetch: env.network });
 
-    // The shouter's code still serves shout, but its latest manifest drops it. The tenant's install pins the old one.
     (provider as { manifest: Manifest }).manifest = { ...shouter.manifest, version: "0.2.0", provides: { actions: {} } };
     await env.api("op", "POST", `/api/apps/${shouterId}/initialize`);
 

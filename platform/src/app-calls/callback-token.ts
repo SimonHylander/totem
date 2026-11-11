@@ -5,21 +5,14 @@ import { CallDepth } from "@totem/runtime";
 import { Context, Layer, Option, Schema } from "effect";
 import { Sealed, randomToken } from "../secrets.js";
 
-// ADR 0008 callback tokens. Minted per platform-to-app call and verified without a store lookup.
-// Format: base64url(JSON claims) + "." + base64url(HMAC-SHA256(key, payload)).
-
-/** The key callback tokens are signed with, new on every start. Whoever holds it can read every connected credential. */
 export class CallbackKey extends Context.Service<CallbackKey, Sealed>()("@totem/platform/CallbackKey") {
   static readonly layer = Layer.sync(CallbackKey, () => new Sealed(randomToken()));
 }
 
 export type CallbackClaims = {
   installId: InstallId;
-  /** Null for the install-scoped token that `install` and `uninstall` hooks receive. */
   callId: CallId | null;
-  /** How many port calls led here. Zero for calls the platform starts (ADR 0013). */
   depth: CallDepth;
-  /** The platform span that made the call. Callbacks are its children (ADR 0016). */
   trace: TraceParent | undefined;
 };
 

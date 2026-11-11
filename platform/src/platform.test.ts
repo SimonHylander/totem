@@ -32,7 +32,6 @@ const mailer = defineApp(manifest, {
   },
 });
 
-/** Three increments that race each other through the platform. */
 const counter = defineApp(
   {
     name: "counter",
@@ -55,7 +54,6 @@ const counter = defineApp(
   },
 );
 
-/** The mailer installed for tenant acme. */
 async function installed() {
   const env = testPlatform(mailer);
   return { ...env, ...(await env.install()) };

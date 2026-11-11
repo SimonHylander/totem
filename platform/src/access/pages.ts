@@ -4,9 +4,6 @@ import { escape, html } from "../http/html.js";
 import { page } from "../http/route.js";
 import { SESSION_COOKIE, signIn } from "./access.js";
 
-// The sign-in page. A browser signs in with a management token, the development login until an
-// IdP exists.
-
 export const pages = [
   page("/signin", (request) =>
     request.method === "POST" ? submitSignIn(request) : Effect.succeed(signInPage(new URL(request.url).searchParams.get("next") ?? "/")),

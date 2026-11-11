@@ -6,11 +6,8 @@ import { pages as connectionPages } from "../connections/pages.js";
 import { Forbidden } from "../errors.js";
 import { escape, html } from "./html.js";
 
-// Browser pages. Failures are left to the HTTP shell, which renders them with `errorPage`.
-
 const pages = [...accessPages, ...connectionPages];
 
-/** Serve one browser request. */
 export const handleBrowser = Effect.fnUntraced(function* (request: Request) {
   const { pathname } = new URL(request.url);
   const { baseUrl } = yield* PlatformConfig;
