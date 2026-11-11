@@ -1,7 +1,7 @@
 import { createHandler, type App, type Manifest } from "@totem/sdk";
 import { Effect, Layer, ManagedRuntime, Tracer, type Duration } from "effect";
 import { TestClock } from "effect/testing";
-import { createPlatform } from "./platform.js";
+import { createPlatform } from "../platform.js";
 
 // Test harness: a platform, one app and any external services wired together in memory. The
 // platform runs on a TestClock that starts at the wall clock, so signatures between the platform

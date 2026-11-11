@@ -2,8 +2,8 @@ import { AppId } from "@totem/ids";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ErrorCode } from "@totem/protocol";
 import { appClient, defineApp, type Manifest } from "@totem/sdk";
-import { Apps } from "./apps.js";
-import { PLATFORM, testPlatform } from "./test-network.js";
+import { Apps } from "../apps/apps.js";
+import { PLATFORM, testPlatform } from "../testing/test-network.js";
 
 // The platform runs generic OAuth 2.0 (ADR 0012), so these tests use a made-up provider. The app
 // declares the provider's endpoints and calls its API with whatever token the platform hands over.

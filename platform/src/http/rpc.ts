@@ -9,38 +9,28 @@ import {
   verify,
   type MethodHandlers,
 } from "@totem/protocol";
-import { AppId, InstallId } from "@totem/ids";
-import { requireActive } from "@totem/installs";
+import { InstallId } from "@totem/ids";
 import { Clock, Effect, Schema, Tracer } from "effect";
-import { bearerToken } from "./access.js";
-import { CallDepth, forward, invoke } from "@totem/runtime";
-import { Apps } from "./apps.js";
-import { CallbackKey, verifyCallbackToken, type CallbackClaims } from "./callback-token.js";
-import { bindPort, connectPort, listApps, listPorts, unbindPort } from "./catalog.js";
-import { Connections } from "./connections.js";
-import { BadRequest, NotDeclared, type PlatformError } from "./errors.js";
-import { Installs, type Install } from "./installs.js";
-import type { Services } from "./platform.js";
+import { bearerToken } from "../access/access.js";
+import { CallbackKey, verifyCallbackToken, type CallbackClaims } from "../app-calls/callback-token.js";
+import { Apps } from "../apps/apps.js";
+import { signedMethods as appSignedMethods } from "../apps/methods.js";
+import { methods as connectionMethods } from "../connections/methods.js";
+import type { PlatformError } from "../errors.js";
+import { Installs, type Install } from "../installs/installs.js";
+import { methods as installMethods, signedMethods as installSignedMethods } from "../installs/methods.js";
+import type { Services } from "../platform.js";
 
 // The endpoint apps call (ADR 0008). The callback token names the install, so params carry no tenant.
 // Signed methods are the exception: the app signs them with its HMAC secret and names one of its
-// installs (ADR 0014, ADR 0015).
+// installs (ADR 0014, ADR 0015). Each capability folder declares its own methods, and the types
+// below fail the build when one in the protocol has no handler.
 
 const LOG_LEVELS = { debug: "Debug", info: "Info", warn: "Warn", error: "Error" } as const;
 
 const methods: MethodHandlers<typeof PlatformMethods, CallbackClaims, PlatformError, Services> = {
-  "credentials/get": ({ name }, { auth: claims }) => Connections.use((connections) => connections.get(claims.installId, name)),
-
-  "state/get": ({ key }, { auth: claims }) =>
-    Effect.map(statefulInstall(claims), (install) => {
-      const entry = install.state.get(key);
-      return { value: entry?.value ?? null, version: entry?.version ?? 0 };
-    }),
-
-  "state/set": Effect.fnUntraced(function* ({ key, value, version }, { auth: claims }) {
-    yield* statefulInstall(claims);
-    return { version: yield* (yield* Installs).setState(claims.installId, key, value, version) };
-  }),
+  ...connectionMethods,
+  ...installMethods,
 
   // The app's own line. It runs under the call's span and opens none (ADR 0016).
   log: ({ level, message, data }, { auth: claims }) =>
@@ -48,21 +38,7 @@ const methods: MethodHandlers<typeof PlatformMethods, CallbackClaims, PlatformEr
       Effect.annotateLogs({ source: "app", installId: claims.installId, ...(claims.callId && { callId: claims.callId }) }),
       Effect.as({}),
     ),
-
-  "actions/invoke": Effect.fnUntraced(function* ({ port, input }, { auth: claims }) {
-    const caller = yield* (yield* Installs).get(claims.installId);
-    return { output: yield* forward(caller, port, input, claims.depth) };
-  }),
 };
-
-/** The calling install, if its manifest declares state. */
-const statefulInstall = Effect.fnUntraced(function* (claims: CallbackClaims) {
-  const install = yield* (yield* Installs).get(claims.installId);
-  if (install.version.manifest.needs.state !== true) {
-    return yield* new NotDeclared({ message: "state is not declared in the manifest" });
-  }
-  return install;
-});
 
 /** Handle one JSON-RPC request from an app. */
 export const handlePlatformMethod = (request: Request) =>
@@ -92,36 +68,9 @@ const callbackEndpoint = endpoint({
   },
 });
 
-/**
- * Methods the app signs with its HMAC secret (ADR 0014, ADR 0015). The install is verified before
- * the method runs.
- */
 const signedMethods: MethodHandlers<typeof SignedPlatformMethods, Install, PlatformError, Services> = {
-  "actions/start": Effect.fnUntraced(function* ({ action, input }, { auth: install }) {
-    const active = yield* Effect.fromResult(requireActive(install));
-    return { output: yield* invoke(active, action, input, CallDepth.make(0)) };
-  }),
-
-  "apps/list": (_params, { auth: install }) => Effect.map(listApps(install), (apps) => ({ apps })),
-
-  "ports/list": (_params, { auth: install }) => Effect.map(listPorts(install), (ports) => ({ ports })),
-
-  "ports/bind": Effect.fnUntraced(function* ({ port, appId, action }, { auth: install }) {
-    const provider = yield* Schema.decodeEffect(AppId)(appId).pipe(
-      Effect.mapError(() => new BadRequest({ message: "appId is required" })),
-    );
-    yield* bindPort(install, port, provider, action);
-    return {};
-  }),
-
-  "ports/unbind": Effect.fnUntraced(function* ({ port }, { auth: install }) {
-    yield* unbindPort(install, port);
-    return {};
-  }),
-
-  "ports/connect": Effect.fnUntraced(function* ({ port, credential, returnTo }, { auth: install }) {
-    return { url: yield* connectPort(install, port, credential, returnTo) };
-  }),
+  ...appSignedMethods,
+  ...installSignedMethods,
 };
 
 /**

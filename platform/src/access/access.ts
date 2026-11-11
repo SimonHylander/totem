@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
 import type { InstallId } from "@totem/ids";
-import { authorize, type InstallActionType, type Principal } from "@totem/permissions";
+import { authorize, type InstallActionType, type ManagementAction, type Principal } from "@totem/permissions";
 import { Context, DateTime, Effect, Layer } from "effect";
-import { Unauthenticated } from "./errors.js";
-import { Installs, type Install } from "./installs.js";
-import { randomToken } from "./secrets.js";
-import { makeTable, type Table } from "./table.js";
+import { Unauthenticated } from "../errors.js";
+import { Installs, type Install } from "../installs/installs.js";
+import { randomToken } from "../secrets.js";
+import { makeTable, type Table } from "../table.js";
 
-// Platform access (ADR 0011). Only the management API uses it. Apps never see a principal.
+// Platform access (ADR 0011). Only the management API and the browser pages use it. Apps never see
+// a principal.
 
 /** An install-scoped action on a stored install. */
 export type InstallAction<T extends InstallActionType> = { readonly type: T; readonly install: Install };
@@ -50,6 +51,9 @@ export const authenticate = Effect.fnUntraced(function* (token: string) {
   return principal;
 });
 
+/** Authorize an action that names no install. */
+export const allowed = <A extends ManagementAction>(principal: Principal, action: A) => Effect.fromResult(authorize(principal, action));
+
 /** Load an install and authorize an install-scoped action on it. */
 export const authorizeInstall = <T extends InstallActionType>(principal: Principal, installId: InstallId, type: T) =>
   Installs.use((installs) => installs.get(installId)).pipe(
@@ -57,6 +61,9 @@ export const authorizeInstall = <T extends InstallActionType>(principal: Princip
   );
 
 const SESSION_TTL = { hours: 12 };
+
+/** The cookie that carries a browser's session ID. */
+export const SESSION_COOKIE = "totem_session";
 
 /** Exchange a management token for a browser session. The development login until an IdP exists. */
 export const signIn = Effect.fnUntraced(function* (token: string) {

@@ -34,7 +34,7 @@ Run detectors from the repo root. `.rgignore` keeps generated files and the HubS
 - **Severity:** S1
 - **Detect:** `rg -nUP 'catch\s*(\([^)]*\))?\s*\{\s*\}|Effect\.(orDie|ignore)\b' -t ts .`. Also read `catch` blocks that only log or set a flag.
 - **Rule:** `no-empty` for empty blocks. `orDie`, `ignore` and catch-and-log are unenforced.
-- **Replace with:** paved path "Errors". `Effect.mapError(() => new X(...))` is fine when the cause must not leak, as in `platform/src/connections.ts`.
+- **Replace with:** paved path "Errors". `Effect.mapError(() => new X(...))` is fine when the cause must not leak, as in `platform/src/connections/connections.ts`.
 
 ### W5 Direct `process.env` reads
 

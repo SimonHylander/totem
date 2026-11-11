@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ErrorCode } from "@totem/protocol";
 import { appClient, defineApp, type Manifest } from "@totem/sdk";
 import { Installs } from "./installs.js";
-import { PLATFORM, testPlatform } from "./test-network.js";
+import { PLATFORM, testPlatform } from "../testing/test-network.js";
 
 const text = { type: "object", required: ["text"], properties: { text: { type: "string" } } } as const;
 

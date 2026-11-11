@@ -5,7 +5,7 @@ import type { IncompatibleVersion } from "@totem/versions";
 import { Schema } from "effect";
 
 // Domain failures. Operations fail with these and never name a wire format. The HTTP shell maps
-// each tag to a status (`http.ts`), the JSON-RPC shell to an ErrorCode (`platform-methods.ts`).
+// each tag to a status (`http/api.ts`), the JSON-RPC shell to an ErrorCode (`http/rpc.ts`).
 
 /** No or unknown management token. */
 export class Unauthenticated extends Schema.TaggedError<Unauthenticated>()("Unauthenticated", {
