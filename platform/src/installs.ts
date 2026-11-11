@@ -9,6 +9,7 @@ import {
   type ActionNotProvided,
   type ForeignInstall,
   type IllegalTransition,
+  InstallRepo,
   type InstallCore,
   type PortBinding,
   type PortNotDeclared,
@@ -17,7 +18,7 @@ import { requireCompatible, type AppVersion, type IncompatibleVersion } from "@t
 import { Context, Effect, Layer, Ref, Result } from "effect";
 import type { Connection, OAuthConnection } from "./connections.js";
 import { NotFound, StateConflict } from "./errors.js";
-import { withEntry } from "./store.js";
+import { withEntry } from "./table.js";
 
 // Stored installs and their one writer (docs/contract.md rule 3). Every change to an install goes
 // through `Installs`. Each change reads and writes the whole collection in one atomic step, so the
@@ -214,6 +215,15 @@ export class Installs extends Context.Service<
     }),
   );
 }
+
+/** Installs for the domain packages, read-only. */
+export const installRepoLayer = Layer.effect(
+  InstallRepo,
+  Effect.gen(function* () {
+    const { lookup } = yield* Installs;
+    return InstallRepo.of({ lookup });
+  }),
+);
 
 type Stored = ReadonlyMap<InstallId, Install>;
 

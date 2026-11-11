@@ -7,14 +7,17 @@ import { authorize, type Authorized } from "@totem/permissions";
 import type { InstallAction, Session } from "./access.js";
 import { BadRequest, Conflict, CredentialMissing, Forbidden, NotDeclared, NotFound, ProviderFailed } from "./errors.js";
 import { Installs, type Install } from "./installs.js";
-import { PlatformConfig, Sealed, Store, randomToken, withEntry } from "./store.js";
+import { Apps } from "./apps.js";
+import { OAUTH_CALLBACK_PATH } from "./paths.js";
+import { PlatformConfig } from "./config.js";
+import { Sealed, randomToken } from "./secrets.js";
+import { withEntry } from "./table.js";
 
 // Connector credentials (ADR 0009, ADR 0012). Tenants connect them, the platform stores and
 // refreshes them, and `credentials/get` hands the current value to the app. `Connections` is the one
 // writer of OAuth clients and pending connects, and the only caller that writes an install's
 // connections through `Installs`.
 
-export const OAUTH_CALLBACK_PATH = "/oauth/callback";
 const CONNECT_TTL = { minutes: 10 };
 /** `credentials/get` refreshes first when less than this remains on the access token. */
 const REFRESH_MARGIN = { minutes: 5 };
@@ -132,7 +135,7 @@ export class Connections extends Context.Service<
   static readonly layer = Layer.effect(
     Connections,
     Effect.gen(function* () {
-      const { apps } = yield* Store;
+      const apps = yield* Apps;
       const installs = yield* Installs;
       const { baseUrl } = yield* PlatformConfig;
       const http = yield* HttpClient.HttpClient;

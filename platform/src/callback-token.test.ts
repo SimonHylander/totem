@@ -2,7 +2,7 @@ import { CallId, InstallId } from "@totem/ids";
 import { CallDepth } from "@totem/runtime";
 import { describe, expect, it } from "vitest";
 import { mintCallbackToken, verifyCallbackToken } from "./callback-token.js";
-import { Sealed } from "./store.js";
+import { Sealed } from "./secrets.js";
 
 describe("callback tokens", () => {
   const key = new Sealed("key");

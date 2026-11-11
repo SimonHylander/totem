@@ -2,11 +2,10 @@ import type { AppId } from "@totem/ids";
 import { declaresPort, providesAction } from "@totem/installs";
 import type { BoundPort, CatalogApp } from "@totem/protocol";
 import { Effect } from "effect";
-import { runInstallHook } from "./apps.js";
+import { Apps, runInstallHook } from "./apps.js";
 import { Connections } from "./connections.js";
 import { BadRequest, PortUnbound } from "./errors.js";
 import { Installs, type Install } from "./installs.js";
-import { Store } from "./store.js";
 
 // The catalog and port methods an app signs with its HMAC secret (ADR 0015). They let an app's own
 // UI show which public apps exist and bind, unbind and connect its ports. The calling install is
@@ -14,7 +13,7 @@ import { Store } from "./store.js";
 
 /** `apps/list`: every initialized public app other than the caller. */
 export const listApps = (caller: Install) =>
-  Store.use(({ apps }) =>
+  Apps.use((apps) =>
     Effect.map(apps.all, (all) =>
       all.flatMap((app): CatalogApp[] => {
         const manifest = app.latest?.manifest;
@@ -55,7 +54,7 @@ export const listPorts = Effect.fnUntraced(function* (caller: Install) {
  */
 export const bindPort = Effect.fnUntraced(function* (caller: Install, port: string, appId: AppId, action: string) {
   yield* declared(caller, port);
-  const app = yield* (yield* Store).apps.lookup(appId);
+  const app = yield* (yield* Apps).lookup(appId);
   if (app?.visibility !== "public" || !app.latest) return yield* new BadRequest({ message: `no public app ${appId}` });
   const installs = yield* Installs;
   // An existing provider runs its pinned version, a new one the latest (ADR 0017).
@@ -79,7 +78,7 @@ export const connectPort = Effect.fnUntraced(function* (caller: Install, port: s
   yield* declared(caller, port);
   const provider = yield* boundProvider(caller, port);
   if (!provider) return yield* new PortUnbound({ message: `port "${port}" has no provider bound` });
-  if (URL.parse(returnTo)?.origin !== new URL((yield* (yield* Store).apps.get(caller.appId)).url).origin) {
+  if (URL.parse(returnTo)?.origin !== new URL((yield* (yield* Apps).get(caller.appId)).url).origin) {
     return yield* new BadRequest({ message: "returnTo must be on the app's own origin" });
   }
   return yield* (yield* Connections).beginOAuthConnect(provider, credential, { sessionId: null, returnTo });

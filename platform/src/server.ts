@@ -1,7 +1,7 @@
 import { Layer } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { Otlp } from "effect/observability";
-import { createPlatform, type PlatformOptions } from "./http.js";
+import { createPlatform, type PlatformOptions } from "./platform.js";
 import { listen } from "./node.js";
 
 // Development server. Reads platform/.env.local (see package.json `dev`).

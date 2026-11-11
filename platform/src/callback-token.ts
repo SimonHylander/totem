@@ -2,11 +2,16 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { CallId, InstallId } from "@totem/ids";
 import { formatTrace, parseTrace, type TraceParent } from "@totem/protocol";
 import { CallDepth } from "@totem/runtime";
-import { Option, Schema } from "effect";
-import type { Sealed } from "./store.js";
+import { Context, Layer, Option, Schema } from "effect";
+import { Sealed, randomToken } from "./secrets.js";
 
 // ADR 0008 callback tokens. Minted per platform-to-app call and verified without a store lookup.
 // Format: base64url(JSON claims) + "." + base64url(HMAC-SHA256(key, payload)).
+
+/** The key callback tokens are signed with, new on every start. Whoever holds it can read every connected credential. */
+export class CallbackKey extends Context.Service<CallbackKey, Sealed>()("@totem/platform/CallbackKey") {
+  static readonly layer = Layer.sync(CallbackKey, () => new Sealed(randomToken()));
+}
 
 export type CallbackClaims = {
   installId: InstallId;

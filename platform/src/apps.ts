@@ -3,19 +3,37 @@ import { requireActive, type PortBinding } from "@totem/installs";
 import { ErrorCode, PROTOCOL_VERSION, type Manifest } from "@totem/protocol";
 import { CallDepth, invoke } from "@totem/runtime";
 import { sameJson, type AppVersion } from "@totem/versions";
-import { Clock, DateTime, Effect } from "effect";
+import { Clock, Context, DateTime, Effect, Layer } from "effect";
 import type { Authorized } from "@totem/permissions";
 import type { InstallAction } from "./access.js";
-import { attributesOf, callApp } from "./adapters.js";
-import { mintCallbackToken } from "./callback-token.js";
+import { attributesOf, callApp } from "./app-calls.js";
+import { CallbackKey, mintCallbackToken } from "./callback-token.js";
 import { Conflict, InvalidManifest } from "./errors.js";
 import { Installs, type Install } from "./installs.js";
-import { PlatformConfig, Sealed, Store, randomToken, type AppRecord, type Visibility } from "./store.js";
+import { PLATFORM_METHODS_PATH } from "./paths.js";
+import { PlatformConfig } from "./config.js";
+import { Sealed, randomToken } from "./secrets.js";
+import { makeTable, type Table } from "./table.js";
 
 // Apps and installs: registration, manifest pull, install hooks and action invocation.
 
-/** The path apps call platform methods on. `initialize` sends `baseUrl + PLATFORM_METHODS_PATH`. */
-export const PLATFORM_METHODS_PATH = "/rpc";
+export type Visibility = "public" | "internal";
+
+export type AppRecord = {
+  readonly id: AppId;
+  readonly url: string;
+  /** ADR 0008 platform-to-app signing key, issued at registration. */
+  readonly secret: Sealed;
+  /** The version new installs get. Null until `initialize` has pulled a manifest (ADR 0017). */
+  readonly latest: AppVersion | null;
+  /** Set by an operator. `apps/list` shows only public apps, and `ports/bind` binds only to them (ADR 0015). */
+  readonly visibility: Visibility;
+};
+
+/** Registered apps by ID. */
+export class Apps extends Context.Service<Apps, Table<AppId, AppRecord>>()("@totem/platform/Apps") {
+  static readonly layer = Layer.effect(Apps, makeTable("app", (app: AppRecord) => app.id));
+}
 
 
 /**
@@ -31,7 +49,7 @@ export const registerApp = Effect.fnUntraced(function* (_: Authorized<{ type: "a
     latest: null,
     visibility: "internal",
   };
-  yield* (yield* Store).apps.put(app);
+  yield* (yield* Apps).put(app);
   return { appId: app.id, secret };
 });
 
@@ -40,7 +58,7 @@ export const registerApp = Effect.fnUntraced(function* (_: Authorized<{ type: "a
  * becomes a new version. Existing installs keep theirs until they upgrade (ADR 0017).
  */
 export const initializeApp = Effect.fnUntraced(function* (_: Authorized<{ type: "app.register" }>, appId: AppId) {
-  const { apps } = yield* Store;
+  const apps = yield* Apps;
   const platformUrl = (yield* PlatformConfig).baseUrl + PLATFORM_METHODS_PATH;
   const { manifest } = yield* callApp(yield* apps.get(appId), "initialize", "initialize", {}, () => ({
     protocolVersion: PROTOCOL_VERSION,
@@ -58,7 +76,7 @@ export const setVisibility = Effect.fnUntraced(function* (
   appId: AppId,
   visibility: Visibility,
 ) {
-  yield* (yield* Store).apps.update(appId, (app) => ({ ...app, visibility }));
+  yield* (yield* Apps).update(appId, (app) => ({ ...app, visibility }));
 });
 
 /** Install an app for a tenant, bind its ports and run its optional `install` hook. */
@@ -68,7 +86,7 @@ export const createInstall = Effect.fnUntraced(function* (
   config: Record<string, unknown>,
   bindings: Record<string, PortBinding>,
 ) {
-  const app = yield* (yield* Store).apps.get(appId);
+  const app = yield* (yield* Apps).get(appId);
   if (!app.latest) return yield* new Conflict({ message: `app ${appId} has no manifest yet. Initialize it first.` });
   const install = yield* (yield* Installs).create(tenantId, app.latest, config, bindings);
   return yield* runInstallHook(app, install);
@@ -79,7 +97,7 @@ export const createInstall = Effect.fnUntraced(function* (
  * hook removes the install again.
  */
 export const runInstallHook = Effect.fnUntraced(function* (app: AppRecord, install: Install) {
-  const { callbackKey } = yield* Store;
+  const callbackKey = yield* CallbackKey;
   const installs = yield* Installs;
   const now = yield* Clock.currentTimeMillis;
   yield* callApp(app, "install", "install", attributesOf(install), (trace) => ({
@@ -110,7 +128,7 @@ export const setBinding = Effect.fnUntraced(function* (
  * version the install runs afterwards.
  */
 export const upgradeInstall = Effect.fnUntraced(function* ({ action: { install } }: Authorized<InstallAction<"install.upgrade">>) {
-  const latest = (yield* (yield* Store).apps.get(install.appId)).latest ?? install.version;
+  const latest = (yield* (yield* Apps).get(install.appId)).latest ?? install.version;
   // Installs compares with the stored version inside the write, so a concurrent upgrade cannot be skipped over.
   return yield* (yield* Installs).upgrade(install.id, latest);
 });

@@ -74,7 +74,7 @@ export default tseslint.config(
     ignores: [
       ...tests,
       "platform/src/connections.ts",
-      "platform/src/adapters.ts",
+      "platform/src/app-calls.ts",
       "platform/src/platform-methods.ts",
       "platform/src/callback-token.ts",
     ],

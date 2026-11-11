@@ -20,7 +20,7 @@ The repo has two zones. Packages, the platform and apps are Effect code. The pro
 
 ## Ports and adapters
 
-- **Path:** declare a port in the domain package as `class X extends Context.Service<X, {...}>()("@totem/<pkg>/X")`. Provide it in the platform as a `Layer` in `platform/src/adapters.ts`.
+- **Path:** declare a port in the domain package as `class X extends Context.Service<X, {...}>()("@totem/<pkg>/X")`. Provide it in the platform as a `Layer` beside the module it adapts, such as `installRepoLayer` in `platform/src/installs.ts`.
 - **Exemplar:** `packages/installs/src/port.ts`
 - **Enforced by:** dependency-cruiser layer rules (`pnpm boundaries`)
 - **Why:** the domain names what it needs, and only the platform touches I/O.
@@ -42,14 +42,14 @@ The repo has two zones. Packages, the platform and apps are Effect code. The pro
 ## Async code
 
 - **Path:** Effect zone: return an `Effect`. Wrap a Promise API with `Effect.tryPromise` at the call site.
-- **Exemplar:** `platform/src/adapters.ts`. Holds W4 and W6.
+- **Exemplar:** `platform/src/app-calls.ts`. Holds W4 and W6.
 - **Enforced by:** `noPromises` in `eslint.config.mjs`, on packages and the platform minus `node.ts`, `server.ts` and tests (W6)
 - **Why:** errors, dependencies and interruption stay typed end to end.
 
 ## Protocol calls
 
-- **Path:** `rpc()` from `protocol/src/jsonrpc.ts`. The platform calls apps through `callApp` in `platform/src/adapters.ts`. Apps call the platform through `platformClient` in the SDK.
-- **Exemplar:** `platform/src/adapters.ts`. Holds W4 and W6.
+- **Path:** `rpc()` from `protocol/src/jsonrpc.ts`. The platform calls apps through `callApp` in `platform/src/app-calls.ts`. Apps call the platform through `platformClient` in the SDK.
+- **Exemplar:** `platform/src/app-calls.ts`. Holds W4 and W6.
 - **Enforced by:** unenforced
 - **Why:** one client signs and traces every protocol request.
 
@@ -76,15 +76,15 @@ The repo has two zones. Packages, the platform and apps are Effect code. The pro
 
 ## Secrets
 
-- **Path:** hold a secret as `Sealed` from `platform/src/store.ts`. Call `reveal()` only where the secret is sent or used as a key.
+- **Path:** hold a secret as `Sealed` from `platform/src/secrets.ts`. Call `reveal()` only where the secret is sent or used as a key.
 - **Exemplar:** `platform/src/connections.ts`. Holds W7.
 - **Enforced by:** `no-restricted-properties` on `reveal`, with a file allowlist (W9)
 - **Why:** `Sealed` prints `[sealed]` in logs, JSON and the inspector.
 
 ## Platform state
 
-- **Path:** a `Table` on `Store` in `platform/src/store.ts`. Records are immutable, and each write replaces the record. Installs and connector credentials are the exceptions: the `Installs` service in `platform/src/installs.ts` writes installs, and the `Connections` service in `platform/src/connections.ts` writes OAuth clients and pending connects and is the only caller that writes an install's connections.
-- **Exemplar:** `platform/src/store.ts`. Holds W7.
+- **Path:** a `Table` from `platform/src/table.ts`, held by the service of the module that writes it, such as `Apps` in `platform/src/apps.ts`. Records are immutable, and each write replaces the record. Installs and connector credentials are the exceptions: the `Installs` service in `platform/src/installs.ts` writes installs, and the `Connections` service in `platform/src/connections.ts` writes OAuth clients and pending connects and is the only caller that writes an install's connections.
+- **Exemplar:** `platform/src/apps.ts`
 - **Enforced by:** unenforced
 - **Why:** state is in memory (ADR 0011), and every table has one writer.
 
