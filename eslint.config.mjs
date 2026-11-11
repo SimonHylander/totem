@@ -73,10 +73,10 @@ export default tseslint.config(
     files: ["platform/src/**"],
     ignores: [
       ...tests,
-      "platform/src/connections.ts",
-      "platform/src/app-calls.ts",
-      "platform/src/platform-methods.ts",
-      "platform/src/callback-token.ts",
+      "platform/src/connections/connections.ts",
+      "platform/src/app-calls/app-calls.ts",
+      "platform/src/http/rpc.ts",
+      "platform/src/app-calls/callback-token.ts",
     ],
     rules: {
       "no-restricted-properties": [

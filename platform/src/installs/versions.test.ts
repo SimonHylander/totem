@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appClient, defineApp, type Manifest } from "@totem/sdk";
-import { PLATFORM, testPlatform } from "./test-network.js";
+import { PLATFORM, testPlatform } from "../testing/test-network.js";
 
 const text = { type: "object", required: ["text"], properties: { text: { type: "string" } } } as const;
 const signature = { input: text, output: text };

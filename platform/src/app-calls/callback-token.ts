@@ -3,7 +3,7 @@ import { CallId, InstallId } from "@totem/ids";
 import { formatTrace, parseTrace, type TraceParent } from "@totem/protocol";
 import { CallDepth } from "@totem/runtime";
 import { Context, Layer, Option, Schema } from "effect";
-import { Sealed, randomToken } from "./secrets.js";
+import { Sealed, randomToken } from "../secrets.js";
 
 // ADR 0008 callback tokens. Minted per platform-to-app call and verified without a store lookup.
 // Format: base64url(JSON claims) + "." + base64url(HMAC-SHA256(key, payload)).

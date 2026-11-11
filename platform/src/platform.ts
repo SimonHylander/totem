@@ -1,14 +1,14 @@
 import { Layer, ManagedRuntime, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { Principal } from "@totem/permissions";
-import { Access, hashToken } from "./access.js";
-import { appTransportLayer } from "./app-calls.js";
-import { Apps } from "./apps.js";
-import { CallbackKey } from "./callback-token.js";
+import { Access, hashToken } from "./access/access.js";
+import { appTransportLayer } from "./app-calls/app-calls.js";
+import { Apps } from "./apps/apps.js";
+import { CallbackKey } from "./app-calls/callback-token.js";
 import { PlatformConfig } from "./config.js";
-import { Connections } from "./connections.js";
-import { handleRequest } from "./http.js";
-import { Installs, installRepoLayer } from "./installs.js";
+import { Connections } from "./connections/connections.js";
+import { handleRequest } from "./http/handle.js";
+import { Installs, installRepoLayer } from "./installs/installs.js";
 
 export type PlatformOptions = {
   /** The platform's public origin, such as `http://localhost:3000`. */

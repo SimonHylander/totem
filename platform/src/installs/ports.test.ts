@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AppError, defineApp, type Manifest } from "@totem/sdk";
-import { testPlatform } from "./test-network.js";
+import { testPlatform } from "../testing/test-network.js";
 
 const text = { type: "object", required: ["text"], properties: { text: { type: "string" } } } as const;
 

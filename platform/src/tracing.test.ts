@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defineApp, type Manifest } from "@totem/sdk";
-import { PLATFORM, spanRecorder, testPlatform } from "./test-network.js";
+import { PLATFORM, spanRecorder, testPlatform } from "./testing/test-network.js";
 
 // One operation is one trace across the platform and every app it calls (ADR 0016).
 

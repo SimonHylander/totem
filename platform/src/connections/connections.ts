@@ -4,14 +4,14 @@ import type { CredentialNeed, CredentialStatus, CredentialValue, Endpoint } from
 import { Context, DateTime, Deferred, Effect, Layer, Option, Ref, Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { authorize, type Authorized } from "@totem/permissions";
-import type { InstallAction, Session } from "./access.js";
-import { BadRequest, Conflict, CredentialMissing, Forbidden, NotDeclared, NotFound, ProviderFailed } from "./errors.js";
-import { Installs, type Install } from "./installs.js";
-import { Apps } from "./apps.js";
-import { OAUTH_CALLBACK_PATH } from "./paths.js";
-import { PlatformConfig } from "./config.js";
-import { Sealed, randomToken } from "./secrets.js";
-import { withEntry } from "./table.js";
+import type { InstallAction, Session } from "../access/access.js";
+import { BadRequest, Conflict, CredentialMissing, Forbidden, NotDeclared, NotFound, ProviderFailed } from "../errors.js";
+import { Installs, type Install } from "../installs/installs.js";
+import { Apps } from "../apps/apps.js";
+import { OAUTH_CALLBACK_PATH } from "../http/paths.js";
+import { PlatformConfig } from "../config.js";
+import { Sealed, randomToken } from "../secrets.js";
+import { withEntry } from "../table.js";
 
 // Connector credentials (ADR 0009, ADR 0012). Tenants connect them, the platform stores and
 // refreshes them, and `credentials/get` hands the current value to the app. `Connections` is the one
