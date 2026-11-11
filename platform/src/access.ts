@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import type { InstallId } from "@totem/ids";
 import { authorize, type InstallActionType, type Principal } from "@totem/permissions";
-import { DateTime, Effect } from "effect";
+import { Context, DateTime, Effect, Layer } from "effect";
 import { Unauthenticated } from "./errors.js";
 import { Installs, type Install } from "./installs.js";
-import { Store, randomToken } from "./store.js";
+import { randomToken } from "./secrets.js";
+import { makeTable, type Table } from "./table.js";
 
 // Platform access (ADR 0011). Only the management API uses it. Apps never see a principal.
 
@@ -18,6 +19,21 @@ export type InstallAction<T extends InstallActionType> = { readonly type: T; rea
  */
 export type Session = { id: string; principal: Principal; expiresAt: DateTime.Utc };
 
+/** Who can manage the platform: the management tokens by SHA-256 hex, and the browser sessions signed in with them. */
+export class Access extends Context.Service<
+  Access,
+  {
+    readonly apiTokens: ReadonlyMap<string, Principal>;
+    readonly sessions: Table<string, Session>;
+  }
+>()("@totem/platform/Access") {
+  static readonly layer = (apiTokens: ReadonlyMap<string, Principal>) =>
+    Layer.effect(
+      Access,
+      Effect.map(makeTable("session", (session: Session) => session.id), (sessions) => Access.of({ apiTokens, sessions })),
+    );
+}
+
 /** The token in an `Authorization: Bearer` header, or an empty string. */
 export function bearerToken(request: Request): string {
   return request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
@@ -29,7 +45,7 @@ export function hashToken(token: string): string {
 
 /** Resolve a management token to its principal. */
 export const authenticate = Effect.fnUntraced(function* (token: string) {
-  const principal = (yield* Store).apiTokens.get(hashToken(token));
+  const principal = (yield* Access).apiTokens.get(hashToken(token));
   if (!principal) return yield* new Unauthenticated({ message: "missing or unknown management token" });
   return principal;
 });
@@ -46,13 +62,13 @@ const SESSION_TTL = { hours: 12 };
 export const signIn = Effect.fnUntraced(function* (token: string) {
   const principal = yield* authenticate(token);
   const session: Session = { id: randomToken(), principal, expiresAt: DateTime.add(yield* DateTime.now, SESSION_TTL) };
-  yield* (yield* Store).sessions.put(session);
+  yield* (yield* Access).sessions.put(session);
   return session;
 });
 
 /** The live session a cookie names, or null. */
 export const sessionFor = Effect.fnUntraced(function* (id: string | undefined) {
-  const session = id ? yield* (yield* Store).sessions.lookup(id) : undefined;
+  const session = id ? yield* (yield* Access).sessions.lookup(id) : undefined;
   if (!session || DateTime.isLessThanOrEqualTo(session.expiresAt, yield* DateTime.now)) return null;
   return session;
 });

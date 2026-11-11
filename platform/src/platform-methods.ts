@@ -10,22 +10,21 @@ import {
   type MethodHandlers,
 } from "@totem/protocol";
 import { AppId, InstallId } from "@totem/ids";
-import { requireActive, type InstallRepo } from "@totem/installs";
+import { requireActive } from "@totem/installs";
 import { Clock, Effect, Schema, Tracer } from "effect";
 import { bearerToken } from "./access.js";
-import { CallDepth, forward, invoke, type AppTransport } from "@totem/runtime";
-import { verifyCallbackToken, type CallbackClaims } from "./callback-token.js";
+import { CallDepth, forward, invoke } from "@totem/runtime";
+import { Apps } from "./apps.js";
+import { CallbackKey, verifyCallbackToken, type CallbackClaims } from "./callback-token.js";
 import { bindPort, connectPort, listApps, listPorts, unbindPort } from "./catalog.js";
 import { Connections } from "./connections.js";
 import { BadRequest, NotDeclared, type PlatformError } from "./errors.js";
 import { Installs, type Install } from "./installs.js";
-import { Store, type PlatformConfig } from "./store.js";
+import type { Services } from "./platform.js";
 
 // The endpoint apps call (ADR 0008). The callback token names the install, so params carry no tenant.
 // Signed methods are the exception: the app signs them with its HMAC secret and names one of its
 // installs (ADR 0014, ADR 0015).
-
-type Services = Store | Installs | Connections | PlatformConfig | AppTransport | InstallRepo;
 
 const LOG_LEVELS = { debug: "Debug", info: "Info", warn: "Warn", error: "Error" } as const;
 
@@ -74,7 +73,7 @@ const callbackEndpoint = endpoint({
   methods,
   authenticate: {
     beforeParse: Effect.fnUntraced(function* (request: Request) {
-      const claims = verifyCallbackToken((yield* Store).callbackKey, bearerToken(request), yield* Clock.currentTimeMillis);
+      const claims = verifyCallbackToken(yield* CallbackKey, bearerToken(request), yield* Clock.currentTimeMillis);
       if (!claims || !(yield* (yield* Installs).lookup(claims.installId))) {
         return yield* new Unauthorized({ message: "bad or expired callback token" });
       }
@@ -138,7 +137,7 @@ const signedEndpoint = endpoint({
       if (installId._tag === "None") return yield* Effect.fail(new RpcError(ErrorCode.InvalidParams, "installId is required"));
 
       const install = yield* (yield* Installs).lookup(installId.value);
-      const app = install && (yield* (yield* Store).apps.lookup(install.appId));
+      const app = install && (yield* (yield* Apps).lookup(install.appId));
       const now = Math.floor((yield* Clock.currentTimeMillis) / 1000);
       const signature = request.headers.get(SIGNATURE_HEADER);
       if (!install || !app || !(yield* Effect.promise(() => verify(app.secret.reveal(), signature, body, { now })))) {

@@ -1,30 +1,20 @@
 import { CallId } from "@totem/ids";
-import { InstallRepo } from "@totem/installs";
 import { AppMethods, RpcError, SIGNATURE_HEADER, formatTrace, rpc, sign, type TraceParent } from "@totem/protocol";
 import { AppFailed, AppTransport } from "@totem/runtime";
 import { Clock, Effect, Layer, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
-import { mintCallbackToken } from "./callback-token.js";
-import { Installs, type Install } from "./installs.js";
-import { Store, type AppRecord } from "./store.js";
+import { Apps, type AppRecord } from "./apps.js";
+import { CallbackKey, mintCallbackToken } from "./callback-token.js";
+import type { Install } from "./installs.js";
 
-// The platform's adapters for the domain ports: Installs as InstallRepo, and signed JSON-RPC over
-// HTTP as AppTransport.
-
-/** Installs for the domain packages, read-only. */
-export const installRepoLayer = Layer.effect(
-  InstallRepo,
-  Effect.gen(function* () {
-    const { lookup } = yield* Installs;
-    return InstallRepo.of({ lookup });
-  }),
-);
+// Calls from the platform to apps: signed JSON-RPC over HTTP, and the AppTransport adapter built on it.
 
 /** Actions run as `actions/invoke` with a fresh call ID and a callback token that carries the depth. */
 export const appTransportLayer = Layer.effect(
   AppTransport,
   Effect.gen(function* () {
-    const { apps, callbackKey } = yield* Store;
+    const apps = yield* Apps;
+    const callbackKey = yield* CallbackKey;
     return AppTransport.of({
       invoke: Effect.fnUntraced(function* (install, action, input, depth) {
         const callId = CallId.make(crypto.randomUUID());

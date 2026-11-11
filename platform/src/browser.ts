@@ -1,9 +1,10 @@
 import { InstallId } from "@totem/ids";
 import { Effect, Schema } from "effect";
 import { authorizeInstall, csrfToken, sessionFor, signIn, type Session } from "./access.js";
-import { Connections, OAUTH_CALLBACK_PATH, type CallbackQuery } from "./connections.js";
+import { Connections, type CallbackQuery } from "./connections.js";
 import { BadRequest, Forbidden } from "./errors.js";
-import { PlatformConfig } from "./store.js";
+import { OAUTH_CALLBACK_PATH } from "./paths.js";
+import { PlatformConfig } from "./config.js";
 
 // Browser pages. OAuth consent is a browser flow, so connecting runs here with a session cookie
 // instead of on the bearer-token API (ADR 0011).

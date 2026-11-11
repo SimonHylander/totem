@@ -1,12 +1,9 @@
 import { AppId, InstallId, TenantId } from "@totem/ids";
-import type { InstallRepo } from "@totem/installs";
-import type { AppTransport } from "@totem/runtime";
-import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
-import { FetchHttpClient, Headers, HttpTraceContext } from "effect/http";
-import { Principal, authorize, type ManagementAction } from "@totem/permissions";
-import { authenticate, authorizeInstall, bearerToken, hashToken } from "./access.js";
+import { Effect, Option, Schema } from "effect";
+import { Headers, HttpTraceContext } from "effect/http";
+import { authorize, type ManagementAction, type Principal } from "@totem/permissions";
+import { authenticate, authorizeInstall, bearerToken } from "./access.js";
 import {
-  PLATFORM_METHODS_PATH,
   createInstall,
   initializeApp,
   invokeAction,
@@ -15,27 +12,15 @@ import {
   setVisibility,
   upgradeInstall,
 } from "./apps.js";
-import { appTransportLayer, installRepoLayer } from "./adapters.js";
 import { browserRoute, errorPage, handleBrowser } from "./browser.js";
 import { Connections } from "./connections.js";
 import { BadRequest, type PlatformError } from "./errors.js";
+import { PLATFORM_METHODS_PATH } from "./paths.js";
 import { handlePlatformMethod } from "./platform-methods.js";
-import { Installs } from "./installs.js";
-import { PlatformConfig, Store } from "./store.js";
+import type { Services } from "./platform.js";
 
 // The HTTP shell. Routes decode the request, authorize it and call one operation with the proof.
 // This is the only place that maps domain failures to HTTP statuses.
-
-export type PlatformOptions = {
-  /** The platform's public origin, such as `http://localhost:3000`. */
-  baseUrl: string;
-  /** Management tokens and who holds them. Decoded when the platform starts. */
-  principals: { token: string; principal: typeof Principal.Encoded }[];
-  allowLocalhost?: boolean;
-  fetch?: typeof fetch;
-};
-
-type Services = Store | Installs | Connections | PlatformConfig | AppTransport | InstallRepo;
 
 const NonEmpty = Schema.NonEmptyString;
 const PortBinding = Schema.Struct({ installId: InstallId, action: NonEmpty });
@@ -223,7 +208,7 @@ const handleApi = Effect.fnUntraced(function* (request: Request, pathname: strin
 });
 
 /** Route one request to the management API, the platform-methods endpoint or the browser pages. */
-const handleRequest = (request: Request): Effect.Effect<Response, never, Services> => {
+export const handleRequest = (request: Request): Effect.Effect<Response, never, Services> => {
   const { pathname } = new URL(request.url);
   const handled: Effect.Effect<Response, PlatformError, Services> =
     request.method === "POST" && pathname === PLATFORM_METHODS_PATH
@@ -243,31 +228,6 @@ const handleRequest = (request: Request): Effect.Effect<Response, never, Service
     ),
   );
 };
-
-/** The services every operation runs with. `fetch` reaches apps, and OAuth providers through HttpClient. */
-export function platformLayer({ baseUrl, principals, allowLocalhost = false, fetch }: PlatformOptions) {
-  const store = Store.layer(new Map(principals.map(({ token, principal }) => [hashToken(token), Schema.decodeUnknownSync(Principal)(principal)])));
-  const base = Layer.mergeAll(
-    store,
-    Installs.layer,
-    Layer.succeed(PlatformConfig, { baseUrl, allowLocalhost }),
-    FetchHttpClient.layer,
-    fetch ? Layer.succeed(FetchHttpClient.Fetch, fetch) : Layer.empty,
-  );
-  return Layer.provideMerge(Layer.mergeAll(installRepoLayer, appTransportLayer, Connections.layer), base);
-}
-
-/**
- * Build the platform. `handle` serves the management API, the browser pages and the platform-methods
- * endpoint. `layer` adds or replaces services, such as a TestClock. `runtime` runs effects against
- * the same services, which tests use to drive the clock.
- */
-export function createPlatform<R = never>(options: PlatformOptions, layer: Layer.Layer<R> = Layer.empty as Layer.Layer<R>) {
-  const runtime = ManagedRuntime.make(Layer.merge(platformLayer(options), layer));
-  // eslint-disable-next-line no-restricted-syntax -- the fetch-style handler servers call
-  const handle = (request: Request): Promise<Response> => runtime.runPromise(handleRequest(request));
-  return { handle, runtime };
-}
 
 const readJson = (request: Request) =>
   Effect.tryPromise({
