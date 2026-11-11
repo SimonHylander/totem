@@ -8,4 +8,5 @@ Questions that block or shape upcoming decisions. Move each one into a decision 
 - **Triggers.** Manifest declares them. `events/emit` and subscription are unspecified.
 - **Changes across state keys.** Conditional writes make changes to one key safe (see [0018](decisions/0018-conditional-state-writes.md)). Whether apps need atomic changes that span several keys.
 - **Manifest JSON Schema fields.** The platform decodes a manifest's shape but not its `input`, `output`, `payload` and `config` against the JSON Schema meta-schema (see [0020](decisions/0020-protocol-effect-schemas.md)). Whether it should, and with which validator.
+- **The protocol client in Effect.** Requests are received by an Effect `endpoint` (see [0021](decisions/0021-one-json-rpc-endpoint.md)), but `rpc()` is still Promise code. Whether it moves to Effect, which would make the SDK's transport Effect code end to end.
 - **End users in apps.** The events `/integrations` page has no login, and one deployment serves one install (see [0015](decisions/0015-apps-manage-their-ports.md)). Decide how an app signs in its users and creates a tenant install of itself for each new organization.

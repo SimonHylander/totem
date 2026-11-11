@@ -1,15 +1,13 @@
 import {
   ErrorCode,
-  JsonRpcRequest,
   PlatformMethods,
   RpcError,
   SIGNATURE_HEADER,
   SignedPlatformMethods,
-  decodeParams,
-  parseTrace,
+  Unauthorized,
+  endpoint,
   verify,
-  type JsonRpcId,
-  type JsonRpcResponse,
+  type MethodHandlers,
 } from "@totem/protocol";
 import { AppId, InstallId } from "@totem/ids";
 import { requireActive, type InstallRepo } from "@totem/installs";
@@ -29,37 +27,30 @@ import { Store, type PlatformConfig } from "./store.js";
 
 type Services = Store | Installs | Connections | PlatformConfig | AppTransport | InstallRepo;
 
-type Methods = {
-  [K in keyof PlatformMethods]: (
-    claims: CallbackClaims,
-    params: PlatformMethods[K]["params"],
-  ) => Effect.Effect<PlatformMethods[K]["result"], PlatformError, Services>;
-};
-
 const LOG_LEVELS = { debug: "Debug", info: "Info", warn: "Warn", error: "Error" } as const;
 
-const methods: Methods = {
-  "credentials/get": (claims, { name }) => Connections.use((connections) => connections.get(claims.installId, name)),
+const methods: MethodHandlers<typeof PlatformMethods, CallbackClaims, PlatformError, Services> = {
+  "credentials/get": ({ name }, { auth: claims }) => Connections.use((connections) => connections.get(claims.installId, name)),
 
-  "state/get": (claims, { key }) =>
+  "state/get": ({ key }, { auth: claims }) =>
     Effect.map(statefulInstall(claims), (install) => {
       const entry = install.state.get(key);
       return { value: entry?.value ?? null, version: entry?.version ?? 0 };
     }),
 
-  "state/set": Effect.fnUntraced(function* (claims, { key, value, version }) {
+  "state/set": Effect.fnUntraced(function* ({ key, value, version }, { auth: claims }) {
     yield* statefulInstall(claims);
     return { version: yield* (yield* Installs).setState(claims.installId, key, value, version) };
   }),
 
   // The app's own line. It runs under the call's span and opens none (ADR 0016).
-  log: (claims, { level, message, data }) =>
+  log: ({ level, message, data }, { auth: claims }) =>
     Effect.logWithLevel(LOG_LEVELS[level])(message, ...(data ? [data] : [])).pipe(
       Effect.annotateLogs({ source: "app", installId: claims.installId, ...(claims.callId && { callId: claims.callId }) }),
       Effect.as({}),
     ),
 
-  "actions/invoke": Effect.fnUntraced(function* (claims, { port, input }) {
+  "actions/invoke": Effect.fnUntraced(function* ({ port, input }, { auth: claims }) {
     const caller = yield* (yield* Installs).get(claims.installId);
     return { output: yield* forward(caller, port, input, claims.depth) };
   }),
@@ -74,66 +65,49 @@ const statefulInstall = Effect.fnUntraced(function* (claims: CallbackClaims) {
   return install;
 });
 
-const isMethod = (name: string): name is keyof PlatformMethods => name in methods;
-
 /** Handle one JSON-RPC request from an app. */
-export const handlePlatformMethod = Effect.fnUntraced(function* (request: Request) {
-  const body = yield* Effect.promise(() => request.text());
-  const signature = request.headers.get(SIGNATURE_HEADER);
-  if (signature !== null) return yield* handleSigned(signature, body);
+export const handlePlatformMethod = (request: Request) =>
+  request.headers.get(SIGNATURE_HEADER) !== null ? signedEndpoint(request) : callbackEndpoint(request);
 
-  const claims = verifyCallbackToken((yield* Store).callbackKey, bearerToken(request), yield* Clock.currentTimeMillis);
-  if (!claims || !(yield* (yield* Installs).lookup(claims.installId))) {
-    return reply(null, new RpcError(ErrorCode.Unauthorized, "bad or expired callback token"), 401);
-  }
-  const parsed = parse(body);
-  if (parsed instanceof Response) return parsed;
-  if (!isMethod(parsed.method)) {
-    return reply(parsed.id, new RpcError(ErrorCode.MethodNotFound, `unknown method "${parsed.method}"`));
-  }
-  const method = methods[parsed.method] as (
-    claims: CallbackClaims,
-    params: unknown,
-  ) => Effect.Effect<unknown, PlatformError, Services>;
-  const params = decodeParams(PlatformMethods, parsed.method, parsed.params);
-  if (params._tag === "Failure") return reply(parsed.id, params.failure);
-  const handled = method(claims, params.success);
-
+const callbackEndpoint = endpoint({
+  schemas: PlatformMethods,
+  methods,
+  authenticate: {
+    beforeParse: Effect.fnUntraced(function* (request: Request) {
+      const claims = verifyCallbackToken((yield* Store).callbackKey, bearerToken(request), yield* Clock.currentTimeMillis);
+      if (!claims || !(yield* (yield* Installs).lookup(claims.installId))) {
+        return yield* new Unauthorized({ message: "bad or expired callback token" });
+      }
+      return claims;
+    }),
+  },
+  toRpcError,
   // The token names the platform span that made the call, so callbacks are its children whatever the
   // app sends. The app's own span, if it is in the same trace, becomes a link (ADR 0016).
-  const parent = claims.trace && Tracer.externalSpan(claims.trace);
-  if (parsed.method === "log") return yield* run(parsed, parent ? Effect.withParentSpan(handled, parent) : handled);
-  const sent = parseTrace(parsed.trace);
-  const links = sent && sent.traceId === claims.trace?.traceId ? [{ span: Tracer.externalSpan(sent), attributes: {} }] : [];
-  const attributes = { "totem.install_id": claims.installId, ...(claims.callId && { "totem.call_id": claims.callId }) };
-  return yield* run(
-    parsed,
-    handled.pipe(Effect.withSpan(`rpc ${parsed.method}`, { kind: "server", attributes, links, ...(parent && { parent }) })),
-  );
+  around: (handled, { method, auth: claims, trace }) => {
+    const parent = claims.trace && Tracer.externalSpan(claims.trace);
+    if (method === "log") return parent ? Effect.withParentSpan(handled, parent) : handled;
+    const links = trace && trace.traceId === claims.trace?.traceId ? [{ span: Tracer.externalSpan(trace), attributes: {} }] : [];
+    const attributes = { "totem.install_id": claims.installId, ...(claims.callId && { "totem.call_id": claims.callId }) };
+    return handled.pipe(Effect.withSpan(`rpc ${method}`, { kind: "server", attributes, links, ...(parent && { parent }) }));
+  },
 });
 
 /**
  * Methods the app signs with its HMAC secret (ADR 0014, ADR 0015). The install is verified before
  * the method runs.
  */
-type SignedMethods = {
-  [K in keyof SignedPlatformMethods]: (
-    install: Install,
-    params: SignedPlatformMethods[K]["params"],
-  ) => Effect.Effect<SignedPlatformMethods[K]["result"], PlatformError, Services>;
-};
-
-const signedMethods: SignedMethods = {
-  "actions/start": Effect.fnUntraced(function* (install, { action, input }) {
+const signedMethods: MethodHandlers<typeof SignedPlatformMethods, Install, PlatformError, Services> = {
+  "actions/start": Effect.fnUntraced(function* ({ action, input }, { auth: install }) {
     const active = yield* Effect.fromResult(requireActive(install));
     return { output: yield* invoke(active, action, input, CallDepth.make(0)) };
   }),
 
-  "apps/list": (install) => Effect.map(listApps(install), (apps) => ({ apps })),
+  "apps/list": (_params, { auth: install }) => Effect.map(listApps(install), (apps) => ({ apps })),
 
-  "ports/list": (install) => Effect.map(listPorts(install), (ports) => ({ ports })),
+  "ports/list": (_params, { auth: install }) => Effect.map(listPorts(install), (ports) => ({ ports })),
 
-  "ports/bind": Effect.fnUntraced(function* (install, { port, appId, action }) {
+  "ports/bind": Effect.fnUntraced(function* ({ port, appId, action }, { auth: install }) {
     const provider = yield* Schema.decodeEffect(AppId)(appId).pipe(
       Effect.mapError(() => new BadRequest({ message: "appId is required" })),
     );
@@ -141,67 +115,50 @@ const signedMethods: SignedMethods = {
     return {};
   }),
 
-  "ports/unbind": Effect.fnUntraced(function* (install, { port }) {
+  "ports/unbind": Effect.fnUntraced(function* ({ port }, { auth: install }) {
     yield* unbindPort(install, port);
     return {};
   }),
 
-  "ports/connect": Effect.fnUntraced(function* (install, { port, credential, returnTo }) {
+  "ports/connect": Effect.fnUntraced(function* ({ port, credential, returnTo }, { auth: install }) {
     return { url: yield* connectPort(install, port, credential, returnTo) };
   }),
 };
-
-const isSignedMethod = (name: string): name is keyof SignedPlatformMethods => name in signedMethods;
 
 /**
  * A request signed by the app. An unknown install, an install of another app and a bad signature
  * all answer Unauthorized, so signed methods do not reveal which installs exist.
  */
-const handleSigned = Effect.fnUntraced(function* (signature: string, body: string) {
-  const parsed = parse(body);
-  if (parsed instanceof Response) return parsed;
-  if (!isSignedMethod(parsed.method)) {
-    return reply(parsed.id, new RpcError(ErrorCode.MethodNotFound, `"${parsed.method}" needs a callback token`));
-  }
-  const decoded = decodeParams(SignedPlatformMethods, parsed.method, parsed.params);
-  if (decoded._tag === "Failure") return reply(parsed.id, decoded.failure);
-  const params = decoded.success;
-  const installId = Schema.decodeUnknownOption(InstallId)(params.installId);
-  if (installId._tag === "None") {
-    return reply(parsed.id, new RpcError(ErrorCode.InvalidParams, "installId is required"));
-  }
+const signedEndpoint = endpoint({
+  schemas: SignedPlatformMethods,
+  methods: signedMethods,
+  authenticate: {
+    afterLookup: Effect.fnUntraced(function* (request: Request, body: string, { installId: id }: { installId: string }) {
+      const installId = Schema.decodeUnknownOption(InstallId)(id);
+      if (installId._tag === "None") return yield* Effect.fail(new RpcError(ErrorCode.InvalidParams, "installId is required"));
 
-  const install = yield* (yield* Installs).lookup(installId.value);
-  const app = install && (yield* (yield* Store).apps.lookup(install.appId));
-  const now = Math.floor((yield* Clock.currentTimeMillis) / 1000);
-  if (!install || !app || !(yield* Effect.promise(() => verify(app.secret.reveal(), signature, body, { now })))) {
-    return reply(parsed.id, new RpcError(ErrorCode.Unauthorized, "bad signature"), 401);
-  }
-  const method = signedMethods[parsed.method] as (
-    install: Install,
-    params: unknown,
-  ) => Effect.Effect<unknown, PlatformError, Services>;
-
+      const install = yield* (yield* Installs).lookup(installId.value);
+      const app = install && (yield* (yield* Store).apps.lookup(install.appId));
+      const now = Math.floor((yield* Clock.currentTimeMillis) / 1000);
+      const signature = request.headers.get(SIGNATURE_HEADER);
+      if (!install || !app || !(yield* Effect.promise(() => verify(app.secret.reveal(), signature, body, { now })))) {
+        return yield* new Unauthorized({ message: "bad signature" });
+      }
+      return install;
+    }),
+  },
+  toRpcError,
   // The signature has verified, so the app's trace member can be the parent (ADR 0016).
-  const sent = parseTrace(parsed.trace);
-  const attributes = { "totem.install_id": install.id, "totem.app_id": install.appId };
-  return yield* run(
-    parsed,
-    method(install, params).pipe(
-      Effect.withSpan(`rpc ${parsed.method}`, { kind: "server", attributes, ...(sent && { parent: Tracer.externalSpan(sent) }) }),
+  around: (handled, { method, auth: install, trace }) =>
+    handled.pipe(
+      Effect.withSpan(`rpc ${method}`, {
+        kind: "server",
+        attributes: { "totem.install_id": install.id, "totem.app_id": install.appId },
+        ...(trace && { parent: Tracer.externalSpan(trace) }),
+      }),
     ),
-  );
+  unknownMethod: (method) => `"${method}" needs a callback token`,
 });
-
-function parse(body: string): JsonRpcRequest | Response {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(body);
-  } catch {
-    return reply(null, new RpcError(ErrorCode.ParseError, "invalid JSON"));
-  }
-  return Schema.is(JsonRpcRequest)(parsed) ? parsed : reply(null, new RpcError(ErrorCode.InvalidRequest, "not a JSON-RPC 2.0 request"));
-}
 
 /** The JSON-RPC code for each domain failure. AppFailed keeps the app's own code. */
 const RPC_CODES: { [K in Exclude<PlatformError["_tag"], "AppFailed">]: number } = {
@@ -229,23 +186,4 @@ function toRpcError(error: PlatformError): RpcError {
   return error._tag === "AppFailed"
     ? new RpcError(error.code, error.message, error.data)
     : new RpcError(RPC_CODES[error._tag], error.message);
-}
-
-/** Run a method and wrap its result or error in a JSON-RPC response. Defects answer InternalError. */
-function run<R>(request: JsonRpcRequest, method: Effect.Effect<unknown, PlatformError, R>): Effect.Effect<Response, never, R> {
-  return method.pipe(
-    Effect.map((result) => reply(request.id, { result })),
-    Effect.catch((error) => Effect.succeed(reply(request.id, toRpcError(error)))),
-    Effect.catchCause((cause) =>
-      Effect.logError(`${request.method} failed`, cause).pipe(
-        Effect.as(reply(request.id, new RpcError(ErrorCode.InternalError, "internal error"))),
-      ),
-    ),
-  );
-}
-
-function reply(id: JsonRpcId, outcome: RpcError | { result: unknown }, status = 200): Response {
-  const body: JsonRpcResponse =
-    outcome instanceof RpcError ? { jsonrpc: "2.0", id, error: outcome.toJSON() } : { jsonrpc: "2.0", id, ...outcome };
-  return Response.json(body, { status });
 }
