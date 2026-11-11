@@ -2,7 +2,7 @@
 
 One blessed way to solve each recurring problem. Copy the exemplar. Weed ids point into [anti-patterns.md](anti-patterns.md). If an **Exemplar** line names a weed, the file still holds that weed, so leave those lines out when you copy.
 
-The repo has two zones. Packages, the platform and apps are Effect code. The protocol and the SDK's transport are Promise code, behind `Totem.App` (ADR 0019). An entry applies to both zones unless it names one.
+The repo has two zones. Packages, the platform and apps are Effect code. The protocol and the SDK's transport are Promise code, behind `Totem.App` (ADR 0019), except the protocol's `endpoint`, which receives every request (ADR 0021). An entry applies to both zones unless it names one.
 
 ## Apps
 

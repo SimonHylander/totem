@@ -1,15 +1,13 @@
 import {
   ErrorCode,
-  JsonRpcRequest,
   PlatformMethods,
   RpcError,
-  decodeParams,
+  endpoint,
   type CredentialValue,
-  type JsonRpcResponse,
   type LogLevel,
   type Manifest,
 } from "@totem/protocol";
-import { Schema } from "effect";
+import { Effect, Record } from "effect";
 import type { Platform } from "./platform.js";
 import type { Credentials, Ports } from "./types.js";
 
@@ -96,24 +94,14 @@ export function fakePlatform<M extends Manifest>(
   };
 
   const call: Platform["call"] = (method, params) => methods[method](params);
-  const isMethod = (name: string): name is keyof PlatformMethods => name in methods;
-
-  const fetch: typeof globalThis.fetch = async (_url, init) => {
-    const request: unknown = JSON.parse(String(init?.body));
-    if (!Schema.is(JsonRpcRequest)(request) || !isMethod(request.method)) {
-      throw new Error(`fakePlatform: not a platform method request: ${String(init?.body)}`);
-    }
-    let response: JsonRpcResponse;
-    try {
-      const params = decodeParams(PlatformMethods, request.method, request.params);
-      if (params._tag === "Failure") throw params.failure;
-      response = { jsonrpc: "2.0", id: request.id, result: await call(request.method, params.success as never) };
-    } catch (error) {
-      if (!(error instanceof RpcError)) throw error;
-      response = { jsonrpc: "2.0", id: request.id, error: error.toJSON() };
-    }
-    return Response.json(response);
-  };
+  const handle = endpoint({
+    schemas: PlatformMethods,
+    methods: Record.map(methods, (method) => (params: unknown) =>
+      Effect.tryPromise({ try: (): Promise<unknown> => method(params as never), catch: (error) => error }),
+    ),
+    authenticate: { beforeParse: () => Effect.void },
+  });
+  const fetch: typeof globalThis.fetch = (input, init) => Effect.runPromise(handle(new Request(input, init)));
 
   return { state, logs, portCalls, call, fetch };
 }

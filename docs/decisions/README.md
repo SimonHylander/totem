@@ -24,3 +24,4 @@ One file per decision. Status is `Accepted`, `Proposed` or `Superseded`. To chan
 | [0018](0018-conditional-state-writes.md) | State writes can name the version they read. `StateConflict` on a stale write, `state.update` in the JS SDK | Accepted |
 | [0019](0019-effect-first-sdk.md) | The TypeScript SDK is Effect first: `Totem.Manifest` and `Totem.App`, Effect Schema emitting JSON Schema | Accepted |
 | [0020](0020-protocol-effect-schemas.md) | Protocol types derive from Effect Schemas, and both sides decode the wire | Accepted |
+| [0021](0021-one-json-rpc-endpoint.md) | One Effect `endpoint` in the protocol receives every JSON-RPC request, in the SDK and the platform | Accepted |
