@@ -3,8 +3,6 @@ import { Match, Result } from "effect";
 import { ActionNotProvided, ForeignInstall, IllegalTransition, InstallNotActive, PortNotDeclared } from "./errors.js";
 import { Active, type ActiveInstall, type InstallCore, type InstallEvent, type InstallStatus, type PortBinding } from "./model.js";
 
-// Pure rules for installs. The platform reads and writes the records and calls these to decide.
-
 /** The status `event` leads to from `status`, or IllegalTransition. */
 export const transition = (status: InstallStatus, event: InstallEvent): Result.Result<InstallStatus, IllegalTransition> =>
   Match.value(event).pipe(

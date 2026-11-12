@@ -11,7 +11,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "live": "turbo run build --filter=@totem/example-events... && pnpm --filter @totem/example-events live",
-    "verify": "turbo run typecheck lint test && pnpm boundaries",
+    "verify": "turbo run typecheck lint test && pnpm boundaries && node --test 'eslint-rules/*.test.mjs'",
     "boundaries": "depcruise protocol/src platform/src sdk/javascript-sdk/src packages/*/src examples/*/src examples/events/scripts --config .dependency-cruiser.cjs",
     "verify:live": "turbo run build --filter=@totem/example-contacts... && pnpm --filter @totem/example-contacts live"
   },

@@ -1,9 +1,5 @@
 import { Schema } from "effect";
 
-// Branded IDs of platform records. Decode wire input with these schemas at the edges: HTTP routes,
-// signed method params and callback token claims. Inside, only the branded types are accepted, so a
-// tenant ID cannot be passed where an install ID belongs.
-
 /** An app registered on the platform. */
 export const AppId = Schema.NonEmptyString.pipe(Schema.brand("AppId"));
 export type AppId = typeof AppId.Type;

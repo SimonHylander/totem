@@ -16,6 +16,16 @@ When a package does not depend on `effect` yet, run the `effect-ts` skill to add
 
 Before writing Effect code, read `node_modules/effect/AGENTS.md` completely and follow its links when required. For APIs the guide does not cover, search the source in `node_modules/effect/src`.
 
+## No comments
+
+Do not write code comments. Agents copy what already exists, so one comment explaining a workaround spreads. Fix what a comment would explain instead: rename, extract a named function, use a type or Schema, or write a test. A reason that belongs to a decision goes in an ADR, and a known gap goes in `docs/open-questions.md`.
+
+`totem/no-comments` (`eslint-rules/no-comments.mjs`) enforces this. It allows only:
+
+- JSDoc on an exported declaration or one of its members. An `ADR nnnn` it names must exist.
+- `quirk:` notes about behaviour we cannot change, such as a browser or a vendor API.
+- `@ts-expect-error` and `eslint-disable` directives that give a reason.
+
 ## Layers
 
 ```
